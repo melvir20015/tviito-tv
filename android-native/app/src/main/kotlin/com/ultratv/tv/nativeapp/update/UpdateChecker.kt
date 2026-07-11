@@ -23,12 +23,12 @@ import java.util.concurrent.TimeUnit
  *
  * Flow:
  *   1) [checkForUpdate] hits GitHub's REST API and parses tag_name + the
- *      UltraTV-debug.apk asset URL from the *latest* release. We compare
+ *      TviitoTV-debug.apk asset URL from the *latest* release. We compare
  *      versionCode (declared in build.gradle.kts) — if the remote tag's name
  *      maps to a higher one we surface an [UpdateInfo].
  *   2) [downloadAndInstall] streams the APK into the app's filesDir and uses
  *      PackageInstaller to commit a session. The system prompts the user the
- *      first time (Settings → Install unknown apps for Ultra TV).
+ *      first time (Settings → Install unknown apps for Tviito TV).
  */
 object UpdateChecker {
 
@@ -102,7 +102,7 @@ object UpdateChecker {
                         if (name.equals(apkName, ignoreCase = true)) {
                             apkUrl = a.optString("browser_download_url")
                         } else if (name.equals("$apkName.sha256", ignoreCase = true)) {
-                            // Sibling checksum asset (e.g. "UltraTV-debug.apk.sha256").
+                            // Sibling checksum asset (e.g. "TviitoTV-debug.apk.sha256").
                             sha256Url = a.optString("browser_download_url")
                         }
                     }
@@ -195,7 +195,7 @@ object UpdateChecker {
         val dir = File(ctx.filesDir, "updates").apply { mkdirs() }
         // Clean previous APKs so we don't fill the disk on repeat updates.
         dir.listFiles()?.forEach { it.delete() }
-        val out = File(dir, "ultra-tv-${info.versionName}.apk")
+        val out = File(dir, "tviito-tv-${info.versionName}.apk")
         val req = Request.Builder().url(info.apkUrl).build()
         http.newCall(req).execute().use { resp ->
             check(resp.isSuccessful) { "download failed ${resp.code}" }

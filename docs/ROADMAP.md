@@ -19,17 +19,17 @@
 
 ## Fase 1 — Identidad propia
 
-- [ ] Nombre provisional.
-- [ ] `applicationId` propio.
-- [ ] Package Kotlin propio o plan gradual.
-- [ ] Icono y banner originales.
-- [ ] About con atribución MIT.
-- [ ] Actualizador propio desactivado o configurado.
-- [ ] Telemetría desactivada.
-- [ ] Configuración de secretos.
-- [ ] CI básico.
+- [x] Nombre provisional: Tviito TV.
+- [x] `applicationId` propio: `com.tviito.tv`.
+- [x] Package Kotlin propio o plan gradual: namespace Kotlin heredado conservado temporalmente; plan gradual documentado.
+- [x] Icono y banner originales.
+- [x] About con atribución MIT.
+- [x] Actualizador propio desactivado o configurado solo por opt-in `TVIITO_*`.
+- [x] Telemetría desactivada por defecto.
+- [x] Configuración de secretos con prefijo propio `TVIITO_*`.
+- [x] CI básico con JDK 17 y Android SDK.
 
-**Salida:** build propio sin dependencia operativa del upstream.
+**Salida:** build propio sin dependencia operativa del upstream. Ver `docs/PHASE_1_IDENTITY.md`.
 
 ## Fase 2 — Perfiles
 

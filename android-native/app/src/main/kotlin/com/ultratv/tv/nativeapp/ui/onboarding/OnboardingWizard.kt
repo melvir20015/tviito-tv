@@ -117,7 +117,7 @@ fun OnboardingWizard(
             }
             Spacer(Modifier.width(14.dp))
             Column {
-                Text("ULTRA", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = UltraTokens.Fg)
+                Text("TVIITO", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = UltraTokens.Fg)
                 Text("TV", fontSize = 10.sp, letterSpacing = 3.sp, color = UltraTokens.Fg3)
             }
         }

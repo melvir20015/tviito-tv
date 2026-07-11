@@ -103,7 +103,7 @@ class RemindersScheduler @Inject constructor(
 
     companion object {
         const val CHANNEL_ID = "reminders"
-        const val ACTION_FIRE = "com.ultratv.tv.nativeapp.REMINDER_FIRE"
+        const val ACTION_FIRE = "com.tviito.tv.REMINDER_FIRE"
         const val EXTRA_ID = "id"
         const val EXTRA_TITLE = "title"
         const val EXTRA_CHANNEL = "channel"

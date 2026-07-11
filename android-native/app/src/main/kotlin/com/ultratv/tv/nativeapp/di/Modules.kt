@@ -21,7 +21,7 @@ object DatabaseModule {
 
     @Provides @Singleton
     fun provideDb(@ApplicationContext ctx: Context): UltraDb =
-        Room.databaseBuilder(ctx, UltraDb::class.java, "ultra-tv.db")
+        Room.databaseBuilder(ctx, UltraDb::class.java, "tviito-tv.db")
             // Versions 1..9 predate schema export; there are no Migration objects
             // for them, so we wipe-and-rebuild when upgrading from any of them.
             // FUTURE: any bump past 10 MUST ship an explicit Migration and be

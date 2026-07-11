@@ -4,9 +4,10 @@
       IPTV providers (Xtream Codes, Stalker portals, naked M3U hosts) commonly
       ship HTTP-only endpoints, so we keep cleartext allowed by default.
 
-      The GitHub Releases auto-update flow and the Cloudflare Worker telemetry
-      endpoints are pinned to TLS — any plain-HTTP attempt to those hosts
-      fails, defeating a downgrade attack on the update channel.
+      Optional update endpoints use GitHub Releases only when a Tviito TV build
+      explicitly opts in through TVIITO_UPDATE_* values. Telemetry endpoints are
+      intentionally not allowlisted here: fork builds keep them blank/disabled,
+      and any future own endpoint must be HTTPS.
     -->
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
@@ -17,6 +18,5 @@
         <domain includeSubdomains="true">github.com</domain>
         <domain includeSubdomains="true">githubusercontent.com</domain>
         <domain includeSubdomains="true">api.github.com</domain>
-        <domain includeSubdomains="true">khalilbenaz.workers.dev</domain>
     </domain-config>
 </network-security-config>

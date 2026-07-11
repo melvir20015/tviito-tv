@@ -8,7 +8,7 @@ import org.junit.Test
 
 class SafeRemoteDefaultsTest {
     @Test
-    fun `fork builds default to telemetry disabled and unconfigured`() {
+    fun `Tviito builds default to telemetry disabled and unconfigured`() {
         assertFalse(UserPrefs().telemetryEnabled)
         assertFalse(RemoteLog.telemetryEnabled)
         assertFalse(RemoteLog.isConfigured)
@@ -17,7 +17,7 @@ class SafeRemoteDefaultsTest {
     }
 
     @Test
-    fun `fork builds default to upstream update checks disabled`() {
+    fun `Tviito builds default to update checks disabled`() {
         assertFalse(BuildConfig.AUTO_UPDATE_ENABLED)
         assertEquals("", BuildConfig.UPDATE_REPO)
         assertEquals("", BuildConfig.UPDATE_APK_NAME)

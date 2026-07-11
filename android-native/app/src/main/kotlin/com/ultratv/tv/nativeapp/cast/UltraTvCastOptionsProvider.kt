@@ -9,7 +9,7 @@ import com.google.android.gms.cast.framework.media.CastMediaOptions
 /**
  * Required by the Google Cast SDK. The receiverApplicationId is the default
  * media receiver — works for plain MP4/HLS/DASH playback without us hosting a
- * custom receiver. If a future custom Ultra TV receiver app is registered,
+ * custom receiver. If a future custom Tviito TV receiver app is registered,
  * swap this for the new app id.
  *
  * Declared in AndroidManifest:

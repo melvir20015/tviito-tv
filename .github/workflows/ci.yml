@@ -52,10 +52,11 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # ubuntu-latest ships a preinstalled Android SDK (ANDROID_HOME set);
-      # gradle pulls any missing platform/build-tools itself. The
-      # android-actions/setup-android action is avoided — its emulator
-      # package download is flaky and the emulator isn't needed to compile.
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and build tools
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
 
       - name: Setup Gradle (with cache)
         uses: gradle/actions/setup-gradle@v4

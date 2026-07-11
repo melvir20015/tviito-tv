@@ -356,7 +356,7 @@ fun SettingsScreen(
                 Button(onClick = {
                     vm.prepareBackup(backupReadyMsg, password = backupPwd.takeIf { it.isNotEmpty() })
                     val suffix = if (backupPwd.isNotEmpty()) "encrypted" else "plain"
-                    saveBackup.launch("ultra-tv-backup-${System.currentTimeMillis()}-$suffix.json")
+                    saveBackup.launch("tviito-tv-backup-${System.currentTimeMillis()}-$suffix.json")
                 }) { Text(S.settingsBackupExport) }
                 Button(onClick = {
                     loadBackup.launch(arrayOf("application/json", "*/*"))
@@ -398,6 +398,26 @@ fun SettingsScreen(
             Text(
                 S.settingsParentalHint,
                 color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 12.sp,
+            )
+        }
+
+        // ---- 6. About / attribution ----
+        SectionCard {
+            Text("Acerca de Tviito TV", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(
+                "Tviito TV es una identidad propia para este cliente IPTV nativo Android TV. No incluye listas, canales, credenciales ni contenido IPTV.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = 12.sp,
+            )
+            Text(
+                "Atribución: este producto deriva de una base publicada como Ultra TV bajo licencia MIT. Se conserva el aviso de licencia y el crédito correspondiente al proyecto base.",
+                color = T.Fg3,
+                fontSize = 12.sp,
+            )
+            Text(
+                "Privacidad: la telemetría remota y el actualizador están desactivados por defecto. Solo pueden activarse mediante opt-in explícito y configuración de infraestructura propia de Tviito TV.",
+                color = T.Fg3,
+                fontSize = 12.sp,
             )
         }
         Spacer(Modifier.height(12.dp))

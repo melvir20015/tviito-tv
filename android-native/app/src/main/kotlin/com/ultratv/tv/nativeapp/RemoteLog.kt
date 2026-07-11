@@ -21,7 +21,7 @@ import java.util.concurrent.TimeUnit
  * background scope.
  *
  * Endpoint + token come from BuildConfig (BuildConfig.LOG_URL / LOG_TOKEN),
- * populated by Gradle from the ULTRA_LOG_URL / ULTRA_LOG_TOKEN property or env
+ * populated by Gradle from the TVIITO_LOG_URL / TVIITO_LOG_TOKEN property or env
  * var. Defaults are blank, so fork builds do not send telemetry unless a build
  * explicitly opts in with its own endpoint and token.
  */

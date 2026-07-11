@@ -9,7 +9,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 
-// ─── Ultra TV — design tokens, mirrored from the design bundle (styles.css)
+// ─── Tviito TV — design tokens, mirrored from the design bundle (styles.css)
 // All visual constants live here so screens stay consistent and a future theme
 // switch can swap them in one place.
 

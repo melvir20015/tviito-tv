@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.LocalContentColor
 
-// ─── Ultra TV nav icons (24×24 stroke style, matches the design's lucide-ish set).
+// ─── Tviito TV nav icons (24×24 stroke style, matches the design's lucide-ish set).
 // Drawn directly on Canvas so we don't pull in a vector graphics library.
 
 enum class UltraIcon {

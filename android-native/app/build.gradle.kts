@@ -23,19 +23,19 @@ val appVersionCode: Int = run {
 }
 
 // Optional remote endpoints. Defaults are intentionally empty/disabled so a
-// plain fork build never phones home to the upstream telemetry worker or
-// GitHub release feed. Private builds may opt in via Gradle properties or
+// plain Tviito TV build never phones home to the external telemetry endpoint or
+// release feed. Private builds may opt in via Gradle properties or
 // environment variables without hardcoding secrets in source.
 fun resolveBuildConfigValue(name: String, default: String): String =
     (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
         ?: System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: default
 
-val ultraLogUrl = resolveBuildConfigValue("ULTRA_LOG_URL", "")
-val ultraLogToken = resolveBuildConfigValue("ULTRA_LOG_TOKEN", "")
-val ultraUpdateRepo = resolveBuildConfigValue("ULTRA_UPDATE_REPO", "")
-val ultraUpdateApkName = resolveBuildConfigValue("ULTRA_UPDATE_APK_NAME", "")
-val ultraAutoUpdateEnabled = resolveBuildConfigValue("ULTRA_AUTO_UPDATE_ENABLED", "false")
+val tviitoLogUrl = resolveBuildConfigValue("TVIITO_LOG_URL", "")
+val tviitoLogToken = resolveBuildConfigValue("TVIITO_LOG_TOKEN", "")
+val tviitoUpdateRepo = resolveBuildConfigValue("TVIITO_UPDATE_REPO", "")
+val tviitoUpdateApkName = resolveBuildConfigValue("TVIITO_UPDATE_APK_NAME", "")
+val tviitoAutoUpdateEnabled = resolveBuildConfigValue("TVIITO_AUTO_UPDATE_ENABLED", "false")
     .equals("true", ignoreCase = true)
 
 android {
@@ -45,7 +45,7 @@ android {
     defaultConfig {
         // Different applicationId during development so it can be installed
         // alongside the existing Capacitor build (com.ultratv.tv).
-        applicationId = "com.ultratv.tv.nativeapp"
+        applicationId = "com.tviito.tv"
         minSdk = 28
         targetSdk = 35
         versionCode = appVersionCode
@@ -54,15 +54,15 @@ android {
 
         // Optional telemetry/update config — see resolveBuildConfigValue() above.
         // Consumed by RemoteLog and UpdateChecker. String values must be wrapped in escaped quotes.
-        buildConfigField("String", "LOG_URL", "\"$ultraLogUrl\"")
-        buildConfigField("String", "LOG_TOKEN", "\"$ultraLogToken\"")
-        buildConfigField("String", "UPDATE_REPO", "\"$ultraUpdateRepo\"")
-        buildConfigField("String", "UPDATE_APK_NAME", "\"$ultraUpdateApkName\"")
-        buildConfigField("boolean", "AUTO_UPDATE_ENABLED", ultraAutoUpdateEnabled.toString())
+        buildConfigField("String", "LOG_URL", "\"$tviitoLogUrl\"")
+        buildConfigField("String", "LOG_TOKEN", "\"$tviitoLogToken\"")
+        buildConfigField("String", "UPDATE_REPO", "\"$tviitoUpdateRepo\"")
+        buildConfigField("String", "UPDATE_APK_NAME", "\"$tviitoUpdateApkName\"")
+        buildConfigField("boolean", "AUTO_UPDATE_ENABLED", tviitoAutoUpdateEnabled.toString())
     }
 
-    // Release signing — reads ULTRA_KEYSTORE / ULTRA_KEYSTORE_PASSWORD /
-    // ULTRA_KEY_ALIAS / ULTRA_KEY_PASSWORD env vars (with ULTRA_LINEAGE for the
+    // Release signing — reads TVIITO_KEYSTORE / TVIITO_KEYSTORE_PASSWORD /
+    // TVIITO_KEY_ALIAS / TVIITO_KEY_PASSWORD env vars (with TVIITO_LINEAGE for the
     // rotation lineage). Falls back to the debug keystore when env vars are
     // missing so a fresh checkout still produces an installable APK in CI / dev.
     // See SECURITY.md for the rotation procedure.
@@ -74,12 +74,12 @@ android {
     // existing debug-key install without "INSTALL_FAILED_UPDATE_INCOMPATIBLE".
     signingConfigs {
         create("release") {
-            val ksPath = System.getenv("ULTRA_KEYSTORE")
+            val ksPath = System.getenv("TVIITO_KEYSTORE")
             if (!ksPath.isNullOrBlank() && file(ksPath).exists()) {
                 storeFile = file(ksPath)
-                storePassword = System.getenv("ULTRA_KEYSTORE_PASSWORD")
-                keyAlias = System.getenv("ULTRA_KEY_ALIAS")
-                keyPassword = System.getenv("ULTRA_KEY_PASSWORD")
+                storePassword = System.getenv("TVIITO_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("TVIITO_KEY_ALIAS")
+                keyPassword = System.getenv("TVIITO_KEY_PASSWORD")
                 // Rotation lineage is only natively supported by APK Signature
                 // Scheme v3 (Android 9 / API 28+). Pre-9 devices would need
                 // the OLD signer for v1/v2 — which we don't ship — so we
@@ -233,11 +233,11 @@ val resignRelease by tasks.registering {
     // that Gradle's configuration cache can't serialize — opt out explicitly.
     notCompatibleWithConfigurationCache("hand-rolled apksigner exec")
     doLast {
-        val ks = System.getenv("ULTRA_KEYSTORE") ?: return@doLast
-        val ksPwd = System.getenv("ULTRA_KEYSTORE_PASSWORD") ?: return@doLast
-        val alias = System.getenv("ULTRA_KEY_ALIAS") ?: return@doLast
-        val keyPwd = System.getenv("ULTRA_KEY_PASSWORD") ?: ksPwd
-        val lineage = System.getenv("ULTRA_LINEAGE") ?: return@doLast
+        val ks = System.getenv("TVIITO_KEYSTORE") ?: return@doLast
+        val ksPwd = System.getenv("TVIITO_KEYSTORE_PASSWORD") ?: return@doLast
+        val alias = System.getenv("TVIITO_KEY_ALIAS") ?: return@doLast
+        val keyPwd = System.getenv("TVIITO_KEY_PASSWORD") ?: ksPwd
+        val lineage = System.getenv("TVIITO_LINEAGE") ?: return@doLast
 
         val apk = file("build/outputs/apk/release/app-release.apk")
         if (!apk.exists()) {

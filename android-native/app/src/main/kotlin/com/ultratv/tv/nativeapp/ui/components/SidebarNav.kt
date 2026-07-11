@@ -106,7 +106,7 @@ fun SidebarNav(navController: NavController) {
             if (expanded) {
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("ULTRA", color = UltraTokens.Fg, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text("TVIITO", color = UltraTokens.Fg, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text("TV", color = UltraTokens.Fg3, fontSize = 10.sp, letterSpacing = 3.sp)
                 }
             }
