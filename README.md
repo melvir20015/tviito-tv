@@ -1,268 +1,758 @@
-# Ultra TV
+# Tviito TV
 
-<p align="center">
-  <img src="docs/redesign/logo.svg" alt="Ultra TV" width="160" />
-</p>
+> Nombre provisional para un reproductor IPTV nativo orientado a Android TV y Google TV.
 
-<p align="center">
-  <strong>Native Android TV / Google TV IPTV player.</strong><br/>
-  Kotlin · Jetpack Compose · Compose-TV · Media3 · Room · Hilt
-</p>
+Tviito TV será un cliente IPTV local-first, diseñado para navegación con control remoto, con televisión en vivo, guía EPG, películas, series, múltiples proveedores y perfiles independientes. El objetivo es lograr una experiencia estable y completa comparable en funcionalidad general a los mejores reproductores IPTV, sin copiar código, marca, recursos visuales ni una interfaz exacta de aplicaciones propietarias.
 
-<p align="center">
-  <a href="https://github.com/khalilbenaz/ultra-tv/releases/latest/download/UltraTV-debug.apk">
-    <img src="https://img.shields.io/badge/Download-Android%20TV%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
-  </a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-0284c7?style=for-the-badge" alt="License" /></a>
-  <img src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin" />
-  <img src="https://img.shields.io/badge/Compose--TV-1.0-4285F4?style=for-the-badge" />
-  <img src="https://img.shields.io/badge/Media3-1.5-FF6F00?style=for-the-badge" />
-</p>
+## Estado
 
----
+Proyecto en planificación e inicio técnico.
 
-## 🎨 New UI (2026 redesign)
+La estrategia recomendada es crear un **fork de Ultra TV** y trabajar únicamente sobre su implementación nativa ubicada en `android-native/`. Esa base ya utiliza Kotlin, Jetpack Compose/Compose for TV, Media3/ExoPlayer, Room, Hilt, Coil y WorkManager, además de admitir Xtream Codes, M3U/M3U8 y Stalker Portal.
 
-Full editorial redesign — AMOLED-first, accent rouge `#FF3A2F`, typo **Instrument Serif** pour les titres + **Geist** / **Geist Mono** pour le reste.
+Antes de implementar funciones nuevas se debe:
 
-<p align="center">
-  <img src="docs/redesign/home.png" alt="Home — hero éditorial + rails Netflix-style" width="900" />
-</p>
+1. Confirmar que `android-native/` compila sin modificaciones.
+2. Crear una línea base de pruebas.
+3. Desactivar o sustituir cualquier telemetría, token, URL de Worker y actualizador que apunten al proyecto original.
+4. Cambiar nombre, package/application ID, logotipo, textos y configuración de actualización.
+5. Conservar el aviso de licencia MIT y el crédito requerido al proyecto base.
+6. Documentar el comportamiento existente antes de modificar la base de datos.
 
-| Écran | Description |
-|---|---|
-| **Home** | Hero éditorial 720 dp · serif 84 sp · eyebrow accent · colonne "En direct maintenant" · rails Continue Watching 16:9 + Films / Séries / Chaînes |
-| **Live TV** | Layout Tivimate 3 panes : catégories (accent pill) · chaînes (numérotation mono, logo dégradé hue) · **fenêtre preview** avec logo géant, chip `EN DIRECT`, cards now/next, CTA Regarder |
-| **Films / Séries** | Hero featured + rails Netflix par catégorie · focus Apple-TV (scale 1.08 + ring accent) |
-| **Detail** | Affiche 320×480 · serif 72 sp · meta accent · `94% match` · épisodes mono `S01E02` |
-| **Guide TV** | Timeline 12 h × N chaînes · ruler mono · ligne `NOW` accent · cards programme avec chip `EN COURS` |
-| **Recherche** | 2 panes : clavier d'écran 4×10 + récentes à gauche · chips de filtres + grille de résultats à droite |
-| **Player** | Overlays minimaux : top bar transport, bottom controls big play + ring accent, **stats card** mono, **EPG drawer** zapping |
-| **Settings** | Tabs sidebar 300 dp · section cards Surface1 + border · MAC card gradient accent · toggle, pills, color swatches |
-| **Onboarding** | Wizard 3 steps · stepper accent · option Cloud (recommandée) vs Manuel · QR code stub |
+## Visión del producto
 
-Multi-View screen was removed in v1.0.0 — too few users, awkward focus on a single remote.
+Una sola instalación podrá contener varias listas o proveedores IPTV y varios perfiles de usuario.
 
-### Logo
+Flujo principal:
 
-<p align="center">
-  <img src="docs/redesign/logo.svg" alt="Ultra TV — logo variant C" width="120" />
-</p>
+```text
+Abrir aplicación
+    ↓
+Seleccionar perfil
+    ↓
+Seleccionar proveedor o usar el último proveedor del perfil
+    ↓
+Inicio personalizado
+    ├── Televisión en vivo
+    ├── Guía EPG
+    ├── Películas
+    ├── Series
+    ├── Continuar viendo
+    ├── Favoritos
+    └── Recomendaciones
+```
 
-Logo "variant C" : dégradé rouge `#FF3A2F → #7A0E08`, trois ondes de diffusion qui émanent d'un point en bas à gauche, triangle play plein à droite. Installé en tant que `ic_launcher` adaptive + banner Android TV (320×180).
+Cada perfil mantendrá separados:
 
----
+- Favoritos.
+- Historial.
+- Progreso de películas y episodios.
+- Último canal visto.
+- Último proveedor utilizado.
+- Configuración de reproducción.
+- Categorías visibles u ocultas.
+- Contenido bloqueado.
+- Calificaciones y señales de preferencia.
+- Recomendaciones.
+- Idioma y zona horaria de presentación, cuando se configure de manera individual.
 
-## What is Ultra TV?
+## Principios
 
-Ultra TV is a **fully native** Android TV IPTV client. D-pad navigation is handled by Compose-TV's focus tree (no WebView bridges), playback uses Media3 / ExoPlayer for native codec support, and the whole catalog (channels, movies, series, EPG, history, favorites) lives in a local Room database. It speaks **Xtream Codes**, **M3U / M3U8** (URL or local file), and **Stalker Portal** out of the box.
+- **TV-first:** todas las pantallas deben funcionar completamente con D-pad, botón central y Back.
+- **Local-first:** perfiles, historial, favoritos y recomendaciones iniciales se procesan localmente.
+- **Privacidad:** no enviar historial, credenciales ni datos del catálogo a servicios propios sin consentimiento explícito.
+- **Legalidad:** la aplicación no incluye, vende, aloja ni distribuye canales o contenido.
+- **Estabilidad antes que cantidad:** no agregar funciones que degraden el cambio de canal, la reproducción o la navegación.
+- **Diseño original:** se puede ofrecer funcionalidad comparable, pero no copiar exactamente pantallas, iconos, textos, marca o recursos de TiviMate, Netflix u otra aplicación.
+- **Código comprobable:** toda función crítica debe incluir pruebas o una estrategia reproducible de verificación.
+- **Migraciones seguras:** no usar migraciones destructivas de Room para usuarios existentes.
 
-A companion **Cloudflare Worker** (in `cloudflare-config/`) provides a MAC-based remote-config dashboard so users can provision their providers from a web browser and have the TV pull them in one click.
+## Alcance del MVP
 
-## Features
+El primer MVP funcional debe incluir:
 
-### Catalog & providers
-- 🎬 **Xtream Codes** · **M3U URL** · **M3U file from local storage** · **Stalker Portal** with Live + VOD + series catalogues (MAC handshake + lazy `create_link` at play time, including movies)
-- 🔁 **Multi-provider** — add as many as you want, pick the default in Settings (★ Default badge)
-- 🚦 **De-duplication** — re-adding the same `(kind, url, username)` reuses the existing row instead of duplicating
-- 🛰️ **Cloud sync via Cloudflare Worker** — paste your device MAC into the dashboard (login + password), add providers, then the app pulls them with one tap. App reads are anonymous (the MAC, hashed from `ANDROID_ID`, is the bearer); only dashboard mutations require the per-MAC password.
-- ⏱️ **Background sync via WorkManager** (every 6 / 12 / 24 h, or every launch)
-- 📈 **Live sync progress banner** pinned to the top of every screen during sync
+1. Compilación estable de la base nativa.
+2. Rebranding completo.
+3. Proveedores Xtream Codes y M3U.
+4. Perfiles locales.
+5. Asignación de proveedores por perfil.
+6. Selección de proveedor al entrar.
+7. Favoritos e historial separados por perfil.
+8. Progreso independiente de películas y series.
+9. TV en vivo con vista previa y cambio rápido.
+10. EPG convertido automáticamente a la zona horaria del usuario.
+11. Ajuste manual de EPG por proveedor y por canal.
+12. Catálogo de películas y series con póster, fondo, sinopsis y créditos cuando existan.
+13. Enriquecimiento opcional de metadatos mediante TMDB.
+14. Recomendaciones locales explicables.
+15. Controles parentales básicos.
+16. Copia de seguridad y restauración local.
+17. Sincronización opcional entre dispositivos.
 
-### Live TV
-- 📺 **Tivimate-style two-pane layout**: categories on the left, channels of the selected category on the right
-- 🔢 Channel position numbers, logos, focus highlight, **now-playing + next-up programme** under each name (from cached EPG)
-- 🏷️ **Categories management** (search, bulk Hide / Show, "Hide adult" preset, 🔒 / 🔞 markers)
-- 🧹 Cleans decorative wrappers (`### FRANCE ###` → `FRANCE`) for display while keeping DB intact
+Quedan fuera del primer MVP:
 
-### Movies / Series
-- 🎞️ **Netflix-style rails by category** (top 25 per rail), hero banner with the featured title
-- 🟦 Focus scale animation (1.0 → 1.08, 160 ms tween)
-- 🔍 Cross-content **search** (debounced 220 ms): channels + movies + series, with **last-10 recent queries** as one-tap chips
-- ★ **Favorites** (per kind, browsable from a dedicated screen)
-- 📚 **Series episodes** loaded on demand — Xtream via `get_series_info` (per-season map), Stalker via `get_ordered_list?category=…`; played through Media3 (Stalker episodes resolve their `stalker://` URL via `create_link` at play time, exactly like channels and movies)
+- Recomendaciones colaborativas entre todos los usuarios.
+- Sincronización completa en la nube.
+- Pagos y suscripciones.
+- Tienda propia de listas o contenido.
+- DRM propietario.
+- Aplicaciones para iOS, web o escritorio.
+- Copia exacta del diseño de otra aplicación.
+- Multi-view, salvo que las métricas y pruebas posteriores justifiquen su regreso.
+- Inteligencia artificial remota para analizar hábitos.
+- Grabación avanzada de televisión en vivo y timeshift, hasta validar almacenamiento, permisos y compatibilidad.
 
-### Player
-- ▶ **Media3 / ExoPlayer** — HLS, DASH, MPEG-TS, MP4 with hardware codec support
-- 🎮 D-pad: BACK = exit, plus **Live**: ▲/▼ zap channels in the current category; **VOD**: ◀/▶ seek
-- 🎚 **Subtitle + audio track selector** (VOD only) — reads Tracks from Media3, applies a TrackSelectionOverride
-- 📋 **EPG drawer overlay** (Live only) — press OK / center to slide in a right-side channel list with now/next; D-pad picks a channel to zap to
-- 📡 **Chromecast button** in the player toolbar — opens the system Cast picker when Google Play Services are available (silent no-op on Cast-less Android TV builds)
-- ⏸️ **Continue watching** (position recorded every 10 s + on dispose)
-- 🚀 **Auto-play last watched on launch** option
-- 🥷 **Open in external player** (VLC / MX / Just Player / Next Player) for codecs Media3 can't handle
-- ⏺ **Record VOD** — from a movie's detail page, queue an OkHttp-backed download via WorkManager; progress visible on a Recordings screen; played locally once done (no external storage permission — saved under app-private external storage)
-- 📐 **Aspect & speed** controls in the player toolbar — Fit / Fill / Zoom / 16:9 / 4:3 for picture, 0.5× / 1× / 1.25× / 1.5× / 2× for VOD playback speed
-- 💤 **Sleep timer** (15 min · 30 min · 1 h · 2 h · cancel) — pauses + exits player at the deadline
-- 📊 **Stream stats overlay** — resolution / video & audio codec / frame rate / bitrate / buffer ahead, toggled from the player overlay
+## Funciones principales
 
-### Discovery / Home
-- 🏠 Dynamic Home: **Continue watching** (tap an item → Resume / Dismiss sheet), **Recently watched**, **Movies**, **Series**, **Featured channels** rails
-- 🆕 **First-time MAC card**: shows your device MAC + dashboard steps when no provider is configured
-- 🗓 **TV Guide grid** (Tivimate-style): 12 h × N channels timeline with "now" indicator, refreshed from the provider's full `xmltv.php` feed (streaming pull-parser handles 50 MB+ feeds)
-- ▦ **Multi-View**: up to 4 channels simultaneously in a 2×2 grid
+### 1. Perfiles
 
-### Personalization
-- 🎨 **3 themes**: Dark · AMOLED · Blue
-- 📐 **Adaptive nav**: sidebar on tablets/TV (≥ 840 dp), top bar on medium widths (600–840 dp, also the user-selectable option in Settings), bottom bar on phones (< 600 dp). Phones / tablets ship from the same APK.
-- 🌍 **Multi-language** UI: English / Français / Español / العربية + System (auto-detect). RTL layout direction flips automatically for Arabic. Translation table covers nav, home, settings and common buttons; the longer prose is still English for now.
-- 🔄 **Boot autolaunch** — open Ultra TV automatically when the box finishes booting
-- 🪟 **Picture-in-picture** — pressing Home while a stream plays shrinks the player into a corner (Android 8+)
-- 🪜 **Onboarding wizard** on first launch — 3-step flow showing the device MAC and the two provider-adding paths
-- 🔢 Show / hide channel numbers, hide adult categories beyond PIN, resume playback toggle, auto-play next episode
+Pantalla inicial tipo selector de perfiles, con diseño original:
 
-### Backup & state
-- 💾 **Export / restore** providers + favorites + watch history as a single JSON file (Storage Access Framework picker)
+- Nombre.
+- Avatar.
+- PIN opcional.
+- Perfil infantil.
+- Idioma.
+- Proveedores permitidos.
+- Preguntar siempre qué proveedor usar.
+- Entrar al último proveedor.
+- Bloqueo de creación, edición o eliminación mediante PIN administrador.
 
-### Security
-- 🔐 **Parental PIN** (SHA-256, DataStore-backed) — auto-locks adult categories on each sync when a PIN is set
-- 🔒 **Per-channel lock** — Settings → Manage locked channels lets you flag individual channels; play prompts for the PIN
-- 🆔 **Stable per-device MAC** derived from `ANDROID_ID` (hashed) — never the real WiFi MAC
+Entidades mínimas:
 
-### Performance
-- 🖼️ **Coil ImageLoader** with 25 %-heap memory + 256 MB disk cache (no re-downloads on scroll)
-- 📦 **Chunked DB inserts** (500 rows / batch) during sync — flat memory on huge catalogs
-- ⚡ **DB indices** on `(providerId, categoryId)` for fast category filtering
-- 🎯 SQL-level filtering for Live TV per category (only the visible subset materialises)
-- 🧱 **R8 / ProGuard release build** with resource shrinking — **18 MB debug → 4.9 MB release** (incl. Google Cast SDK) (latest APK shipped is the release variant)
-- 📑 **Paging Room** for Movies / Series flat-grid (pages of 60, only ~120 items in memory regardless of catalog size)
+```text
+Profile
+ProfileProvider
+ProfilePreference
+ProfileParentalRule
+```
 
-### Distribution & updates
-- 🇩 **Downloader code `5248504`** — initial sideload via the [Downloader app](https://www.aftvnews.com/downloader/) on any Android TV box.
-- 🌐 GitHub Releases — latest APK at `releases/latest/download/UltraTV-debug.apk`.
-- 🔄 **In-app self-update** (v1.0.5+) — the app pings GitHub Releases on launch, compares versionCode, and pops a dialog with a progress bar that downloads + installs the new APK via PackageInstaller. First update prompts once for "Install unknown apps"; subsequent updates are one-tap. No Play Store, no third-party updater required.
+### 2. Varios proveedores
 
-### Telemetry & crash reporting
-- 🛰️ **Cloudflare Worker ingest** — every crash + ad-hoc `RemoteLog.info/warn/error/debug(...)` event is POSTed directly to the worker. No local crash.txt; no ADB pulls.
-- 📒 **Crash dashboard** — `GET /crashes?token=…` returns an HTML page with expandable stack traces, device + version columns, 30-day rolling window.
-- 🪵 **Event dashboard** — `GET /logs?token=…` table with level colouring (debug / info / warn / error), 7-day rolling window.
-- 🔑 Token-gated via `env.CRASH_TOKEN` (fallback to `env.ADMIN_PASSWORD`). The app ships the URL + token baked in so every install reports automatically.
+Tipos iniciales:
 
-## Quick start
+- Xtream Codes.
+- M3U/M3U8 por URL.
+- M3U local.
+- Stalker Portal como compatibilidad posterior o heredada de la base.
 
-### Install on a TV box
+Cada proveedor debe tener:
 
-1. Install the **Downloader** app on your Android TV box from Google Play.
-2. Open Downloader, enter code **`5248504`**, press **Go**.
-3. Allow install from unknown sources when prompted; install the APK.
-4. On first launch, you'll see a **First-time setup** card with your device MAC.
-5. Either:
-   - Open **Settings** → tap **+ Xtream / + M3U URL / + M3U file / + Stalker portal** and fill in the form.
-   - **Or** self-host the Cloudflare Worker, provision your MAC in its dashboard, then **Sync from cloud**.
+- ID local estable.
+- Nombre visible.
+- Tipo.
+- URL normalizada.
+- Credenciales cifradas.
+- EPG asociado.
+- Zona horaria de origen del EPG.
+- Prioridad.
+- Fecha y estado de última sincronización.
+- Política de actualización.
+- Estado activo/inactivo.
 
-From v1.0.5 onwards you only need Downloader for the *first* install — the app auto-updates itself from GitHub Releases.
+Nunca registrar contraseñas, tokens ni URLs completas con credenciales.
 
-### Build from source
+### 3. Televisión en vivo
+
+Vista TV-first con:
+
+- Categorías.
+- Lista de canales.
+- Logotipo.
+- Programa actual y siguiente.
+- Barra de progreso.
+- Vista previa.
+- Canal anterior/siguiente.
+- Cambio rápido.
+- Favoritos.
+- Recientes.
+- Categorías ocultas.
+- Bloqueo parental.
+- Selector de audio y subtítulos.
+- Relación de aspecto.
+- Decodificación y fallback a reproductor externo cuando sea necesario.
+- Estadísticas técnicas opcionales.
+
+### 4. Guía EPG
+
+La guía debe manejar correctamente **dos conceptos distintos**:
+
+1. Zona horaria de origen del EPG.
+2. Zona horaria de visualización del usuario.
+
+Regla principal:
+
+```text
+Fecha/hora del EPG + zona/offset de origen
+    → convertir a Instant/UTC
+    → almacenar como instante universal
+    → mostrar mediante la zona del dispositivo o la zona elegida por el perfil
+```
+
+Comportamiento:
+
+- Usar `ZoneId.systemDefault()` por defecto.
+- Permitir que el usuario seleccione otra zona IANA, por ejemplo `America/Los_Angeles`.
+- Respetar offsets incluidos en XMLTV.
+- Aplicar automáticamente horario de verano mediante reglas IANA.
+- Si el EPG no incluye offset, usar la zona configurada en el proveedor.
+- Inferir la zona de origen solo cuando exista una señal confiable.
+- Conservar ajuste manual en horas y minutos:
+  - Global por proveedor.
+  - Por grupo.
+  - Por canal.
+- Permitir intervalos de 15 minutos.
+- No sustituir silenciosamente una configuración manual confirmada.
+- Guardar la razón y confianza de cualquier inferencia automática.
+
+La zona del usuario por sí sola no puede corregir un EPG cuyo origen sea desconocido. El sistema debe conocer o inferir primero la zona de origen.
+
+### 5. Películas y series
+
+Presentación cinematográfica original:
+
+- Póster.
+- Backdrop.
+- Gradiente para legibilidad.
+- Título.
+- Año.
+- Duración.
+- Géneros.
+- Puntuación y cantidad de votos.
+- Sinopsis.
+- Reparto.
+- Director o creadores.
+- Clasificación por edad.
+- Idiomas y calidad entregados por el proveedor.
+- Temporadas y episodios.
+- Continuar viendo.
+- Reproducir siguiente episodio.
+- Favorito.
+- Me gusta, no me gusta y no me interesa.
+
+El foco sobre un elemento no debe iniciar consultas de red costosas. Las imágenes y metadatos deben venir de caché o cargarse de forma cancelable.
+
+### 6. Enriquecimiento de metadatos
+
+Objetivo: completar catálogos donde el proveedor solo entrega un título o datos incompletos.
+
+Flujo:
+
+```text
+Dato original del proveedor
+    ↓
+Normalización del título
+    ↓
+Detección de película/serie/episodio
+    ↓
+Búsqueda por ID externo o título + año
+    ↓
+Cálculo de confianza
+    ↓
+Asignación automática o revisión
+    ↓
+Persistencia local y caché
+```
+
+Ejemplo:
+
+```text
+Entrada:
+JOHN.WICK.4.2023.2160P.LATINO
+
+Resultado:
+Título: John Wick: Chapter 4
+Año: 2023
+Calidad: 4K
+Idioma: Español latino
+```
+
+Reglas:
+
+- Priorizar `tmdb_id` o `imdb_id` cuando el proveedor los incluya.
+- Separar etiquetas de calidad, idioma y fuente sin perderlas.
+- No sobrescribir el dato original.
+- Guardar proveedor de metadatos, versión, fecha y confianza.
+- Coincidencia automática recomendada con confianza >= 0.90.
+- Entre 0.75 y 0.89: revisión o aceptación diferida.
+- Menor de 0.75: no asignar.
+- Permitir corregir y bloquear manualmente una coincidencia.
+- Unificar duplicados entre proveedores mediante un `ContentIdentity`.
+- No publicar claves API en el repositorio.
+- Usar un adaptador `MetadataProvider` para no depender permanentemente de TMDB.
+
+Información deseada:
+
+- Título oficial y original.
+- Año y fecha de estreno.
+- Sinopsis.
+- Póster y backdrop.
+- Géneros y palabras clave.
+- Reparto.
+- Director/creadores.
+- Duración.
+- Puntuación y cantidad de votos.
+- Clasificación por edad.
+- Colección o saga.
+- Temporadas y episodios.
+- IDs externos.
+
+### 7. Recomendaciones
+
+El MVP utilizará un algoritmo local, explicable y basado en reglas. No se requiere machine learning en la primera versión.
+
+Señales:
+
+- Porcentaje reproducido.
+- Finalización.
+- Repetición.
+- Favorito.
+- Me gusta.
+- No me gusta.
+- No me interesa.
+- Abandono temprano.
+- Géneros.
+- Actores.
+- Director/creador.
+- Palabras clave.
+- Saga.
+- Idioma.
+- Puntuación ponderada por cantidad de votos.
+- Actividad reciente del perfil.
+
+Ejemplo de pesos iniciales:
+
+```text
+30 % géneros
+20 % actores
+10 % director o creador
+15 % palabras clave o temática
+10 % puntuación ponderada
+ 5 % popularidad
+10 % comportamiento reciente del perfil
+```
+
+Modificadores:
+
+```text
++ saga que el usuario sigue
++ actor con afinidad alta
++ coincide con la intención de la sesión
+- ya visto, excepto en "Volver a ver"
+- marcado "No me interesa"
+- marcado "No me gusta"
+- abandonado de inmediato
+```
+
+Filas iniciales:
+
+- Porque viste…
+- Películas con actores que te gustan.
+- Series parecidas a tus favoritas.
+- Continuar viendo.
+- Siguiente episodio.
+- Volver a ver.
+- Alta puntuación dentro de tus géneros.
+- Descubrimientos para este perfil.
+- Contenido familiar, para perfiles autorizados.
+
+Cada recomendación debe poder explicar el motivo:
+
+```text
+Recomendada porque viste John Wick y Nobody.
+Coincidencias: Acción · Thriller · Crimen.
+```
+
+No mezclar títulos ya vistos con recomendaciones nuevas, salvo en una fila explícita de “Volver a ver”.
+
+### 8. Seguridad y privacidad
+
+- Cifrar credenciales usando Android Keystore.
+- No colocar tokens en `BuildConfig` de una compilación pública si pueden extraerse y abusarse.
+- Mantener claves de desarrollo en `local.properties` o variables de entorno.
+- No enviar historial o perfiles sin consentimiento.
+- Hacer telemetría opt-in.
+- Sanitizar logs.
+- No registrar URLs con usuario, contraseña, token o MAC.
+- Hashear PIN con una función apropiada y salt; no usar SHA-256 simple como almacenamiento final del PIN.
+- Separar PIN parental y PIN administrador.
+- Añadir exportación y restauración cifrada en una fase posterior.
+- Revisar política de TMDB antes de una distribución comercial.
+
+## Arquitectura propuesta
+
+Estructura inicial, manteniendo un solo módulo Android mientras el proyecto madura:
+
+```text
+android-native/app/src/main/kotlin/<nuevo_paquete>/
+├── app/
+├── core/
+│   ├── database/
+│   ├── network/
+│   ├── security/
+│   ├── time/
+│   ├── logging/
+│   └── common/
+├── data/
+│   ├── provider/
+│   ├── catalog/
+│   ├── epg/
+│   ├── metadata/
+│   ├── recommendation/
+│   └── profile/
+├── domain/
+│   ├── model/
+│   ├── repository/
+│   └── usecase/
+├── playback/
+├── sync/
+└── ui/
+    ├── onboarding/
+    ├── profiles/
+    ├── providerpicker/
+    ├── home/
+    ├── live/
+    ├── guide/
+    ├── movies/
+    ├── series/
+    ├── details/
+    ├── player/
+    ├── recommendations/
+    └── settings/
+```
+
+No realizar una modularización Gradle grande durante la primera fase. Primero estabilizar límites de dominio y pruebas; modularizar cuando los límites sean claros.
+
+## Modelo de datos mínimo
+
+```text
+Profile
+- id
+- name
+- avatarKey
+- pinCredentialId
+- isKids
+- preferredLanguage
+- displayZoneId
+- createdAt
+- updatedAt
+
+Provider
+- id
+- name
+- type
+- baseUrl
+- encryptedCredentialRef
+- epgUrl
+- epgSourceZoneId
+- epgManualOffsetMinutes
+- enabled
+- lastSyncAt
+
+ProfileProvider
+- profileId
+- providerId
+- enabled
+- priority
+- isDefault
+
+ContentIdentity
+- id
+- type
+- tmdbId
+- imdbId
+- normalizedTitle
+- releaseYear
+
+ProviderContent
+- id
+- providerId
+- providerItemId
+- contentIdentityId
+- originalTitle
+- normalizedTitle
+- streamDescriptor
+- languageTags
+- qualityTags
+
+MetadataRecord
+- contentIdentityId
+- source
+- sourceId
+- title
+- originalTitle
+- overview
+- posterPath
+- backdropPath
+- runtimeMinutes
+- voteAverage
+- voteCount
+- confidence
+- lockedByUser
+- fetchedAt
+
+Favorite
+- profileId
+- providerContentId
+- createdAt
+
+WatchProgress
+- profileId
+- providerContentId
+- seasonNumber
+- episodeNumber
+- positionMs
+- durationMs
+- completed
+- updatedAt
+
+WatchEvent
+- id
+- profileId
+- providerContentId
+- type
+- positionMs
+- durationMs
+- occurredAt
+
+UserFeedback
+- profileId
+- contentIdentityId
+- value
+- createdAt
+
+EpgProgram
+- id
+- providerId
+- channelId
+- startInstant
+- endInstant
+- originalStartText
+- title
+- description
+- sourceZoneId
+- appliedOffsetMinutes
+
+ChannelTimeRule
+- providerId
+- channelId
+- sourceZoneId
+- manualOffsetMinutes
+- detectionConfidence
+- userLocked
+
+Recommendation
+- profileId
+- contentIdentityId
+- score
+- reasonCode
+- explanation
+- generatedAt
+```
+
+## Tecnologías
+
+Base:
+
+- Kotlin.
+- Jetpack Compose.
+- Compose for TV.
+- AndroidX Media3 / ExoPlayer.
+- Room.
+- Hilt.
+- WorkManager.
+- Coil.
+- Retrofit/OkHttp o el cliente ya presente en la base.
+- Kotlin Coroutines y Flow.
+- Java Time (`Instant`, `ZoneId`, `ZonedDateTime`).
+- JDK 17.
+
+Servicios opcionales:
+
+- TMDB para metadatos.
+- Backend propio únicamente para configuración remota, sincronización opcional o telemetría consentida.
+
+## Variables locales
+
+Crear un archivo no versionado para secretos de desarrollo:
+
+```properties
+# local.properties
+TMDB_BEARER_TOKEN=replace_me
+```
+
+Agregar una muestra sin secretos:
+
+```properties
+# local.properties.example
+TMDB_BEARER_TOKEN=
+```
+
+Nunca incluir credenciales IPTV reales en fixtures, capturas, tickets, commits o logs.
+
+## Inicio del desarrollo
+
+### Opción recomendada: fork
 
 ```bash
-git clone https://github.com/khalilbenaz/ultra-tv
-cd ultra-tv/android-native
+git clone https://github.com/khalilbenaz/ultra-tv.git
+cd ultra-tv
+git remote rename origin upstream
+git remote add origin <URL_DE_TU_REPOSITORIO>
+git checkout -b develop
+```
 
-# JDK 17 is required (Android Gradle Plugin 8.7+)
-export JAVA_HOME=$(/usr/libexec/java_home -v 17)   # macOS
+Compilar la base:
+
+```bash
+cd android-native
+./gradlew clean test lint assembleDebug
+```
+
+En Windows PowerShell:
+
+```powershell
+cd android-native
+.\gradlew.bat clean test lint assembleDebug
+```
+
+APK:
+
+```text
+android-native/app/build/outputs/apk/debug/app-debug.apk
+```
+
+### Primer objetivo
+
+No comenzar implementando recomendaciones, TMDB o perfiles.
+
+El primer pull request debe limitarse a:
+
+1. Auditoría reproducible de la base.
+2. Compilación limpia.
+3. Rebranding provisional.
+4. Eliminación o aislamiento de telemetría y actualizaciones del upstream.
+5. Configuración segura de secretos.
+6. Pruebas mínimas de humo.
+7. Documentación de la base de datos y navegación actuales.
+
+## Comandos de calidad
+
+Desde `android-native/`:
+
+```bash
+./gradlew test
+./gradlew lint
 ./gradlew assembleDebug
-
-# APK at app/build/outputs/apk/debug/app-debug.apk
 ```
 
-For a smaller signed release build:
+Cuando exista un emulador o dispositivo:
 
 ```bash
-./gradlew assembleRelease
-# ~8 MB APK at app/build/outputs/apk/release/app-release.apk
+./gradlew connectedDebugAndroidTest
 ```
 
-### Deploy the Cloudflare Worker (optional)
+Antes de considerar completa una tarea:
 
-```bash
-cd cloudflare-config
-npm i -g wrangler
+- Compila.
+- Lint no introduce errores nuevos.
+- Pruebas relevantes pasan.
+- No hay secretos.
+- No se rompió navegación por D-pad.
+- No se rompieron migraciones.
+- Se documentaron cambios visibles.
+- Se probó al menos en emulador Android TV.
+- Para reproducción, se realizó prueba en hardware real cuando el cambio afecte códecs o decodificación.
 
-wrangler kv:namespace create CONFIG             # paste id/preview_id into wrangler.toml
-wrangler kv:namespace create CONFIG --preview
-wrangler secret put ADMIN_PASSWORD              # strong password — dashboard login
-wrangler secret put CRASH_TOKEN                 # optional: rotate the crash-report token away from the admin one
-wrangler deploy
+## Estrategia de ramas
+
+```text
+main       releases estables
+develop    integración
+feature/*  funciones
+fix/*      correcciones
+chore/*    mantenimiento
 ```
 
-The Worker URL printed by wrangler is what you paste in the app's Settings → **Change** next to the Worker URL field, and is also the host of the crash + event dashboards (`/crashes?token=…`, `/logs?token=…`).
+Los cambios grandes deben dividirse en pull requests revisables. No crear un solo PR para toda la aplicación.
 
-If you fork the project, swap the hard-coded `WORKER_URL` + `TOKEN` constants in `android-native/.../RemoteLog.kt` and `UpdateChecker.kt` so your installs report to *your* worker, not the upstream one.
+## Criterios de aceptación del MVP
 
-## Architecture
+- Un usuario puede crear al menos cuatro perfiles.
+- Cada perfil mantiene favoritos e historial independientes.
+- Un perfil puede tener acceso a uno o varios proveedores.
+- Al entrar se puede preguntar qué proveedor usar o abrir el último.
+- El EPG se presenta en la zona horaria local del usuario.
+- Los cambios de horario de verano no requieren un ajuste manual fijo.
+- El usuario puede corregir un proveedor o canal con offset manual.
+- El catálogo puede enriquecerse sin modificar el título original del proveedor.
+- Las coincidencias inciertas no se asignan silenciosamente.
+- Los duplicados entre listas pueden compartir una identidad de contenido.
+- Las recomendaciones excluyen lo ya visto, salvo “Volver a ver”.
+- Cada recomendación tiene una explicación.
+- La aplicación funciona sin cuenta en la nube.
+- Las credenciales no aparecen en logs ni exportaciones sin cifrar.
+- Todas las pantallas principales son operables con D-pad.
+- La reproducción existente no empeora frente a la línea base medida.
 
+## Métricas técnicas
+
+Registrar localmente, sin contenido sensible:
+
+- Tiempo de inicio.
+- Tiempo hasta mostrar catálogo.
+- Tiempo hasta primer frame.
+- Porcentaje de fallos de reproducción.
+- Reconexiones.
+- Tasa de coincidencia de metadatos.
+- Coincidencias corregidas manualmente.
+- Tiempo de generación de recomendaciones.
+- Uso de memoria en catálogos grandes.
+- Fluidez de scroll y cambios de foco.
+- Errores de parsing EPG.
+- Canales con zona inferida y confianza.
+
+## Reglas legales y de distribución
+
+- Mantener la licencia MIT y atribución del código base.
+- No usar el nombre TiviMate, Netflix ni logotipos de terceros en la aplicación.
+- No presentar la app como afiliada o aprobada por dichos servicios.
+- No distribuir listas, credenciales, enlaces o contenido.
+- Mostrar un aviso: el usuario debe usar fuentes para las cuales tenga autorización.
+- Revisar los requisitos de atribución y uso comercial del proveedor de metadatos antes de publicar.
+- Revisar las políticas de Google Play aplicables a contenido, propiedad intelectual y credenciales.
+
+## Documentos del repositorio
+
+- `README.md`: visión, alcance e instalación.
+- `AGENTS.md`: instrucciones obligatorias para Codex.
+- `docs/PRODUCT_REQUIREMENTS.md`: requisitos detallados.
+- `docs/ARCHITECTURE.md`: arquitectura y decisiones técnicas.
+- `docs/ROADMAP.md`: fases y backlog.
+- `docs/DECISIONS.md`: decisiones que no deben reinterpretarse sin discusión.
+- `docs/CODEX_START_PROMPT.md`: primera tarea lista para Codex.
+- `docs/SYNC_SPEC.md`: cuenta, vinculación, offline-first, conflictos y seguridad.
+
+## Próximo paso
+
+Abrir el repositorio en Codex y ejecutar únicamente la tarea contenida en:
+
+```text
+docs/CODEX_START_PROMPT.md
 ```
-android-native/
-├── app/src/main/kotlin/com/ultratv/tv/nativeapp/
-│   ├── MainActivity.kt         (entry point + nav host)
-│   ├── UltraTvApp.kt           (Hilt + Coil + WorkManager Configuration.Provider)
-│   ├── BootReceiver.kt         (BOOT_COMPLETED → MainActivity)
-│   ├── data/
-│   │   ├── db/                 (Room entities + DAOs)
-│   │   ├── xtream/             (Xtream Codes player_api.php client)
-│   │   ├── stalker/            (Stalker Portal handshake + create_link)
-│   │   ├── m3u/                (M3U/M3U8 parser, URL or text input)
-│   │   ├── repo/               (Provider / Catalog / History / PlaybackContext / SyncStatusBus)
-│   │   ├── sync/               (WorkManager SyncWorker + SyncScheduler)
-│   │   ├── parental/           (PIN store, SHA-256)
-│   │   ├── prefs/              (UserPreferences, HiddenCategoriesStore)
-│   │   └── config/             (DeviceMac, RemoteConfigImporter)
-│   ├── di/                     (Hilt modules: DB / Network)
-│   ├── nav/                    (Routes catalog)
-│   ├── RemoteLog.kt            (direct-to-Worker crash + event transport)
-│   ├── update/                 (UpdateChecker + UpdateDialog — GitHub Releases self-update)
-│   └── ui/
-│       ├── theme/              (DesignTokens, ultraCardColors, palettes: AMOLED / Dark / Blue)
-│       ├── components/         (SidebarNav, TopBarNav, UltraIcons — 28 stroke icons)
-│       ├── common/             (PosterCard, ContentRail, HeroBanner, ChannelLogo, ContinueWatchingTile, NowPlayingMini)
-│       ├── home/               (rails + MAC onboarding card)
-│       ├── live/               (Tivimate 3-pane: categories | channels | preview window)
-│       ├── movies/             (Rails view + Detail)
-│       ├── series/             (Rails view + Detail with episodes)
-│       ├── guide/              (12 h × N timeline grid with NOW accent line)
-│       ├── search/             (on-screen keyboard + filter chips + grid)
-│       ├── favorites/
-│       ├── categories/         (Hide / Show + bulk)
-│       ├── player/             (Media3 PlayerView wrapper)
-│       └── settings/           (editorial header + section cards + AddProviderDialogs)
-└── cloudflare-config/          (Worker: KV-backed config per MAC + crash & event dashboards)
-```
 
-## Roadmap
+## Sincronización entre dispositivos
 
-In active development / next iterations:
+La sincronización será opcional y offline-first:
 
-- 📊 **7-day xmltv** (current grid covers 12 h; longer window is a windowing change away)
-- 🔍 **Full-text search index** (Room FTS4) — current LIKE is ok up to ~10k items
-- 🧭 **Aggregated crash grouping** on the dashboard (currently one entry per occurrence; collapsing by stack fingerprint would scale better)
+- Room seguirá siendo la base local.
+- El usuario podrá crear una cuenta y un hogar.
+- Otro televisor se vinculará mediante QR o código temporal.
+- Se sincronizarán perfiles, favoritos, historial, progreso, feedback, preferencias, controles parentales, ajustes EPG y correcciones manuales.
+- Cachés, imágenes, catálogo completo y filas EPG se regenerarán localmente.
+- Las credenciales IPTV no se sincronizarán en el MVP.
+- Una fase posterior podrá sincronizarlas con cifrado de extremo a extremo.
+- El backend se abstraerá mediante `CloudSyncGateway`.
+- Los conflictos se resolverán según el tipo de dato.
 
-Recently landed:
-
-- 🔓 **Anonymous worker sync (v1.0.8)** — the app no longer needs the per-MAC password to pull its config. The dashboard `/login` still gates mutations.
-- 🎯 **Settings dialog focus (v1.0.8)** — text fields grab D-pad focus on dialog open and show an accent-tinted border so the cursor is visible.
-- 🔁 **Update dialog loop fix (v1.0.8)** — local + remote versions are now compared on the same packed-semver scale; no more "update available" popping after every install.
-- 🪟 **Auto-update via system installer (v1.0.6)** — switched from PackageInstaller sessions to `ACTION_VIEW` + FileProvider so the OS install activity handles the APK. Works on Fire TV, Mecool, vivo boxes that rejected the session path.
-- 🩹 **Focus visibility + sidebar flicker (v1.0.7)** — `inverseOnSurface` flipped to near-black so TV Button/Card focus reads as a white pill with dark text instead of white-on-white. Sidebar labels gate on the animated width so returning via the left D-pad doesn't reflow text.
-- 🎨 **2026 editorial redesign** of every screen — AMOLED-first, accent `#FF3A2F`, Instrument Serif + Geist typo, new variant-C launcher icon. See the *New UI* section above.
-- 🛰️ **Remote crash + event reporting** to a self-hosted Cloudflare Worker (`POST /api/crash`, `POST /api/event`); HTML dashboards at `/crashes` and `/logs`. No more `crash.txt` hunting.
-- 🔄 **In-app GitHub-Releases auto-update** with a download progress bar + PackageInstaller commit. After v1.0.5 the Downloader code is only needed for the very first install.
-- 🩹 **LiveViewModel init-order NPE fix** that was crashing any nav to Live TV on some devices (Main.immediate dispatch + property declared after init).
-- 📥 **HLS-segment recording** for Live channels (m3u8 polling + .ts append).
-- 🌐 **Deep i18n EN / FR / ES / AR** across every screen — Home, Live, Movies/Series, Settings (incl. private dialogs and SAF toasts), Preferences, Categories, Onboarding wizard, Guide list + grid, Add-provider dialogs, parental PIN flow, Recordings, Search, Player overlays plus the rail-title fallback. ~270 keys, RTL-aware.
-- 👆 **Touch UX**: vertical-drag gesture overlays for system volume (right strip, `🔊 nn%`) and screen brightness (left strip, `☀ nn%`); **pull-to-refresh** on Home, Live TV, Movies, Series and the Guide grid. Both inert under D-pad, so TV remote behaviour is unchanged.
-
-## Credits
-
-Ultra TV — original work by [khalilbenaz](https://github.com/khalilbenaz). MIT-licensed.
-
-The native Android TV codebase supersedes the earlier Capacitor WebView build (kept under `android-app/` and `web/` for historical reference — legacy, no releases produced from it, see [`android-app/README.md`](android-app/README.md)) — Compose-TV's focus tree gave reliable D-pad navigation on every box we tested, including the Mecool KM7 Plus where the WebView bridge approach struggled.
-
-If you fork / repackage, please keep the credit visible in the About screen.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
-
-## Disclaimer
-
-Ultra TV is an IPTV **client**, not a content provider. It does not include, host or distribute any stream. Use only playlists, EPG sources and credentials you are authorized to access in your jurisdiction.
+Especificación: `docs/SYNC_SPEC.md`.

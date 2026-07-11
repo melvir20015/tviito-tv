@@ -1,0 +1,9 @@
+# Local secrets
+local.properties
+*.jks
+*.keystore
+.env
+.env.*
+
+# Codex local logs
+.codex-log/
