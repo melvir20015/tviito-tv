@@ -86,3 +86,4 @@ android-native/build/
 ultra-tv-secrets/
 release-signing.env
 *.lineage
+*.diff
