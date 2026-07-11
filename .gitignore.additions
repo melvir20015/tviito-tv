@@ -7,3 +7,4 @@ local.properties
 
 # Codex local logs
 .codex-log/
+*.diff
