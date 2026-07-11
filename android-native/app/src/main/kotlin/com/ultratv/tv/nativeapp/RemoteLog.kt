@@ -22,10 +22,8 @@ import java.util.concurrent.TimeUnit
  *
  * Endpoint + token come from BuildConfig (BuildConfig.LOG_URL / LOG_TOKEN),
  * populated by Gradle from the ULTRA_LOG_URL / ULTRA_LOG_TOKEN property or env
- * var, falling back to the historical production values (see app/build.gradle.kts).
- * They are still embedded in the APK so every install reports without setup —
- * BuildConfig just lets us override them at build time instead of editing
- * source. Rotate them in lock-step with the worker secret.
+ * var. Defaults are blank, so fork builds do not send telemetry unless a build
+ * explicitly opts in with its own endpoint and token.
  */
 object RemoteLog {
 
@@ -55,8 +53,11 @@ object RemoteLog {
     @Volatile private var appCtx: android.content.Context? = null
 
     /** Mirrors UserPrefs.telemetryEnabled; toggled at runtime from Settings.
-     *  Defaults to true so the dashboard keeps catching crashes out of the box. */
-    @Volatile var telemetryEnabled: Boolean = true
+     *  Defaults to false so fork builds never phone home before explicit opt-in. */
+    @Volatile var telemetryEnabled: Boolean = false
+
+    val isConfigured: Boolean
+        get() = WORKER_URL.isNotBlank() && TOKEN.isNotBlank()
 
     /**
      * Strip embedded credentials and stream URLs from any message bound for
@@ -106,7 +107,7 @@ object RemoteLog {
 
     private fun flushPendingCrash() {
         val ctx = contextInfo ?: return
-        if (!telemetryEnabled) return
+        if (!telemetryEnabled || !isConfigured) return
         val file = pendingCrashFile() ?: return
         if (!file.exists() || file.length() == 0L) return
         val stack = runCatching { file.readText(Charsets.UTF_8) }.getOrNull().orEmpty()
@@ -134,7 +135,7 @@ object RemoteLog {
     /** Ship a non-fatal log/event. Returns immediately; HTTP happens off-thread. */
     fun event(tag: String, message: String, level: String = "info") {
         val ctx = contextInfo ?: return
-        if (!telemetryEnabled) return
+        if (!telemetryEnabled || !isConfigured) return
         val safeMessage = sanitize(message)
         scope.launch {
             runCatching {
@@ -180,7 +181,7 @@ object RemoteLog {
         runCatching { pendingCrashFile()?.appendText(payload + "\n\n", Charsets.UTF_8) }
 
         // 2. Best-effort live upload. Honour the user's telemetry toggle.
-        if (!telemetryEnabled) return
+        if (!telemetryEnabled || !isConfigured) return
         runCatching {
             val body = JSONObject().apply {
                 put("mac", ctx.mac)

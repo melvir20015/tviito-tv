@@ -22,24 +22,21 @@ val appVersionCode: Int = run {
     parts[0] * 10_000 + parts[1] * 100 + parts[2]
 }
 
-// Remote-telemetry endpoint + token. Previously hardcoded as consts inside
-// RemoteLog.kt and baked into the APK. They are now BuildConfig fields so the
-// values can be overridden per build without touching source — via a Gradle
-// property (-PULTRA_LOG_URL=... / gradle.properties) or an environment variable
-// (ULTRA_LOG_URL / ULTRA_LOG_TOKEN). The defaults below are the historical
-// production values, so a plain local/CI build behaves exactly as before.
-// Rotate these in lock-step with the worker secret.
+// Optional remote endpoints. Defaults are intentionally empty/disabled so a
+// plain fork build never phones home to the upstream telemetry worker or
+// GitHub release feed. Private builds may opt in via Gradle properties or
+// environment variables without hardcoding secrets in source.
 fun resolveBuildConfigValue(name: String, default: String): String =
     (project.findProperty(name) as String?)?.takeIf { it.isNotBlank() }
         ?: System.getenv(name)?.takeIf { it.isNotBlank() }
         ?: default
 
-val ultraLogUrl = resolveBuildConfigValue(
-    "ULTRA_LOG_URL", "https://ultratv-config.khalilbenaz.workers.dev",
-)
-val ultraLogToken = resolveBuildConfigValue(
-    "ULTRA_LOG_TOKEN", "f-w31zHuqg0ntBPRSJtOVEXGB55B9uv5",
-)
+val ultraLogUrl = resolveBuildConfigValue("ULTRA_LOG_URL", "")
+val ultraLogToken = resolveBuildConfigValue("ULTRA_LOG_TOKEN", "")
+val ultraUpdateRepo = resolveBuildConfigValue("ULTRA_UPDATE_REPO", "")
+val ultraUpdateApkName = resolveBuildConfigValue("ULTRA_UPDATE_APK_NAME", "")
+val ultraAutoUpdateEnabled = resolveBuildConfigValue("ULTRA_AUTO_UPDATE_ENABLED", "false")
+    .equals("true", ignoreCase = true)
 
 android {
     namespace = "com.ultratv.tv.nativeapp"
@@ -55,10 +52,13 @@ android {
         versionName = appVersionName
         vectorDrawables { useSupportLibrary = true }
 
-        // Telemetry transport config — see resolveBuildConfigValue() above.
-        // Consumed by RemoteLog. String values must be wrapped in escaped quotes.
+        // Optional telemetry/update config — see resolveBuildConfigValue() above.
+        // Consumed by RemoteLog and UpdateChecker. String values must be wrapped in escaped quotes.
         buildConfigField("String", "LOG_URL", "\"$ultraLogUrl\"")
         buildConfigField("String", "LOG_TOKEN", "\"$ultraLogToken\"")
+        buildConfigField("String", "UPDATE_REPO", "\"$ultraUpdateRepo\"")
+        buildConfigField("String", "UPDATE_APK_NAME", "\"$ultraUpdateApkName\"")
+        buildConfigField("boolean", "AUTO_UPDATE_ENABLED", ultraAutoUpdateEnabled.toString())
     }
 
     // Release signing — reads ULTRA_KEYSTORE / ULTRA_KEYSTORE_PASSWORD /

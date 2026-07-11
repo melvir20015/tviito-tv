@@ -33,8 +33,11 @@ import java.util.concurrent.TimeUnit
 object UpdateChecker {
 
     private const val TAG = "update"
-    private const val REPO = "khalilbenaz/ultra-tv"
-    private const val APK_NAME = "UltraTV-debug.apk"
+    private val repo: String get() = BuildConfig.UPDATE_REPO
+    private val apkName: String get() = BuildConfig.UPDATE_APK_NAME
+
+    val isConfigured: Boolean
+        get() = BuildConfig.AUTO_UPDATE_ENABLED && repo.isNotBlank() && apkName.isNotBlank()
 
     data class UpdateInfo(
         val tag: String,
@@ -59,9 +62,10 @@ object UpdateChecker {
     }
 
     suspend fun checkForUpdate(): UpdateInfo? = withContext(Dispatchers.IO) {
+        if (!isConfigured) return@withContext null
         runCatching {
             val req = Request.Builder()
-                .url("https://api.github.com/repos/$REPO/releases/latest")
+                .url("https://api.github.com/repos/$repo/releases/latest")
                 .header("Accept", "application/vnd.github+json")
                 .build()
             http.newCall(req).execute().use { resp ->
@@ -95,16 +99,16 @@ object UpdateChecker {
                     for (i in 0 until assets.length()) {
                         val a = assets.getJSONObject(i)
                         val name = a.optString("name")
-                        if (name.equals(APK_NAME, ignoreCase = true)) {
+                        if (name.equals(apkName, ignoreCase = true)) {
                             apkUrl = a.optString("browser_download_url")
-                        } else if (name.equals("$APK_NAME.sha256", ignoreCase = true)) {
+                        } else if (name.equals("$apkName.sha256", ignoreCase = true)) {
                             // Sibling checksum asset (e.g. "UltraTV-debug.apk.sha256").
                             sha256Url = a.optString("browser_download_url")
                         }
                     }
                 }
                 if (apkUrl.isNullOrBlank()) {
-                    RemoteLog.warn(TAG, "no $APK_NAME asset on $tag")
+                    RemoteLog.warn(TAG, "no $apkName asset on $tag")
                     return@use null
                 }
                 val info = UpdateInfo(tag, verName, remoteCode, apkUrl!!, notes, sha256Url)

@@ -49,10 +49,9 @@ data class UserPrefs(
      *  empty for unprotected entries. Persists across launches; never logged. */
     val configPassword: String = "",
     /** Telemetry opt-in. When false, RemoteLog drops every event/crash POST
-     *  silently. Defaults to true because the app surfaces this in Settings
-     *  and the diagnostic flow is what keeps the redesign honest; flipping
-     *  it off stops the dashboard cold for that install. */
-    val telemetryEnabled: Boolean = true,
+     *  silently. Defaults to false so fork builds do not send diagnostics
+     *  before explicit user and build-time configuration opt-in. */
+    val telemetryEnabled: Boolean = false,
 
     // Playback / TV-quality knobs — exposed in Settings.
     /** Buffer target in seconds. Media3's default is 15 s, which is decent but
@@ -118,7 +117,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             hasSeenOnboarding = p[Keys.seenOnboarding] ?: false,
             language = p[Keys.language] ?: "system",
             configPassword = p[Keys.configPassword] ?: "",
-            telemetryEnabled = p[Keys.telemetry] ?: true,
+            telemetryEnabled = p[Keys.telemetry] ?: false,
             bufferSeconds = p[Keys.bufferSec] ?: 30,
             autoFrameRate = p[Keys.autoFrameRate] ?: true,
             preferSoftwareDecoder = p[Keys.preferSwDec] ?: false,
