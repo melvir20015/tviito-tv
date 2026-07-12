@@ -249,12 +249,8 @@ private fun UltraTvAppRoot(sidebarPosition: SidebarPosition) {
             }
         }
         com.ultratv.tv.nativeapp.ui.common.ToasterHost()
-        // First-run wizard renders itself as a full-screen overlay only when no
-        // provider is configured AND the user hasn't dismissed it. Keeping it
-        // inside the NavController scope lets its CTAs navigate to Settings.
-        com.ultratv.tv.nativeapp.ui.onboarding.OnboardingWizard(
-            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
-        )
+        // Onboarding is intentionally not mounted here: startup should open
+        // the main app directly, even before any provider has been configured.
         }
     }
 }
