@@ -17,6 +17,11 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -167,6 +172,7 @@ fun OnboardingWizard(
                 1 -> ProviderStep(
                     S = S,
                     mac = vm.mac,
+                    onOpen = { vm.dismiss(); onOpenSettings() },
                     onNext = { step = 2 },
                     onBack = { step = 0 },
                 )
@@ -188,6 +194,13 @@ private fun WelcomeStep(
     onNext: () -> Unit,
     onSkip: () -> Unit,
 ) {
+    val nextFocus = remember { FocusRequester() }
+    val skipFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { nextFocus.requestFocus() }
+    }
+
     Column(
         Modifier.widthIn(max = 1100.dp).padding(horizontal = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -223,11 +236,17 @@ private fun WelcomeStep(
                     containerColor = UltraTokens.CtaBg,
                     contentColor = UltraTokens.CtaFgOnCta,
                 ),
-                modifier = Modifier.border(3.dp, UltraTokens.Accent, RoundedCornerShape(14.dp)),
+                modifier = Modifier
+                    .focusRequester(nextFocus)
+                    .focusProperties { right = skipFocus }
+                    .border(3.dp, UltraTokens.Accent, RoundedCornerShape(14.dp)),
             ) { Text(S.wizardNext + "  →", fontSize = 16.sp, fontWeight = FontWeight.SemiBold) }
             Button(
                 onClick = onSkip,
                 colors = ButtonDefaults.colors(containerColor = UltraTokens.Surface2),
+                modifier = Modifier
+                    .focusRequester(skipFocus)
+                    .focusProperties { left = nextFocus },
             ) { Text(S.wizardSkip, color = UltraTokens.Fg2) }
         }
     }
@@ -238,9 +257,18 @@ private fun WelcomeStep(
 private fun ProviderStep(
     S: com.ultratv.tv.nativeapp.i18n.Strings,
     mac: String,
+    onOpen: () -> Unit,
     onNext: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val openFocus = remember { FocusRequester() }
+    val backFocus = remember { FocusRequester() }
+    val nextFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { openFocus.requestFocus() }
+    }
+
     Column(
         Modifier.widthIn(max = 1280.dp).padding(horizontal = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -382,6 +410,15 @@ private fun ProviderStep(
                         Text(desc, color = UltraTokens.Fg4, fontSize = 11.sp)
                     }
                 }
+                Spacer(Modifier.height(16.dp))
+                Button(
+                    onClick = onOpen,
+                    colors = ButtonDefaults.colors(
+                        containerColor = UltraTokens.Accent,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier.focusRequester(openFocus),
+                ) { Text(S.wizardAddProviderCta + "  →", fontWeight = FontWeight.SemiBold) }
             }
         }
         Spacer(Modifier.height(28.dp))
@@ -393,6 +430,9 @@ private fun ProviderStep(
             Button(
                 onClick = onBack,
                 colors = ButtonDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier
+                    .focusRequester(backFocus)
+                    .focusProperties { right = nextFocus },
             ) { Text("← " + S.wizardBack, color = UltraTokens.Fg3) }
             Button(
                 onClick = onNext,
@@ -400,7 +440,10 @@ private fun ProviderStep(
                     containerColor = UltraTokens.CtaBg,
                     contentColor = UltraTokens.CtaFgOnCta,
                 ),
-                modifier = Modifier.border(3.dp, UltraTokens.Accent, RoundedCornerShape(12.dp)),
+                modifier = Modifier
+                    .focusRequester(nextFocus)
+                    .focusProperties { left = backFocus }
+                    .border(3.dp, UltraTokens.Accent, RoundedCornerShape(12.dp)),
             ) { Text(S.wizardNext + "  →", fontWeight = FontWeight.SemiBold) }
         }
     }
@@ -414,6 +457,14 @@ private fun DoneStep(
     onSkip: () -> Unit,
     onBack: () -> Unit,
 ) {
+    val backFocus = remember { FocusRequester() }
+    val skipFocus = remember { FocusRequester() }
+    val openFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { openFocus.requestFocus() }
+    }
+
     Column(
         Modifier.widthIn(max = 1100.dp).padding(horizontal = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -458,11 +509,17 @@ private fun DoneStep(
             Button(
                 onClick = onBack,
                 colors = ButtonDefaults.colors(containerColor = Color.Transparent),
+                modifier = Modifier
+                    .focusRequester(backFocus)
+                    .focusProperties { right = skipFocus },
             ) { Text("← " + S.wizardBack, color = UltraTokens.Fg3) }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = onSkip,
                     colors = ButtonDefaults.colors(containerColor = UltraTokens.Surface2),
+                    modifier = Modifier
+                        .focusRequester(skipFocus)
+                        .focusProperties { left = backFocus; right = openFocus },
                 ) { Text(S.wizardSkip, color = UltraTokens.Fg2) }
                 Button(
                     onClick = onOpen,
@@ -470,6 +527,9 @@ private fun DoneStep(
                         containerColor = UltraTokens.Accent,
                         contentColor = Color.White,
                     ),
+                    modifier = Modifier
+                        .focusRequester(openFocus)
+                        .focusProperties { left = skipFocus },
                 ) { Text(S.wizardAddProviderCta + "  →", fontWeight = FontWeight.SemiBold) }
             }
         }

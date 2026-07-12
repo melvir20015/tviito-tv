@@ -186,11 +186,6 @@ private fun Root(vm: AppViewModel = hiltViewModel()) {
     ) {
         UltraTvTheme(theme = prefs.theme) {
             UltraTvAppRoot(prefs.sidebarPosition)
-            // First-run wizard renders itself as a full-screen overlay only
-            // when no provider is configured AND the user hasn't dismissed it.
-            com.ultratv.tv.nativeapp.ui.onboarding.OnboardingWizard(
-                onOpenSettings = { /* user can re-enter Settings via sidebar */ },
-            )
         }
     }
 }
@@ -254,6 +249,12 @@ private fun UltraTvAppRoot(sidebarPosition: SidebarPosition) {
             }
         }
         com.ultratv.tv.nativeapp.ui.common.ToasterHost()
+        // First-run wizard renders itself as a full-screen overlay only when no
+        // provider is configured AND the user hasn't dismissed it. Keeping it
+        // inside the NavController scope lets its CTAs navigate to Settings.
+        com.ultratv.tv.nativeapp.ui.onboarding.OnboardingWizard(
+            onOpenSettings = { nav.navigate(Routes.SETTINGS) },
+        )
         }
     }
 }

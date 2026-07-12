@@ -1,5 +1,7 @@
 package com.ultratv.tv.nativeapp.ui.settings
 
+import androidx.compose.foundation.focusGroup
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -52,6 +54,8 @@ fun AddProviderDialog(
     canSubmit: Boolean,
     content: @Composable () -> Unit,
 ) {
+    BackHandler(onBack = onDismiss)
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -61,6 +65,7 @@ fun AddProviderDialog(
         Column(
             modifier = Modifier
                 .widthIn(min = 480.dp, max = 720.dp)
+                .focusGroup()
                 .clip(RoundedCornerShape(16.dp))
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(24.dp),
@@ -155,7 +160,7 @@ fun XtreamDialog(onDismiss: () -> Unit, onSubmit: (name: String, url: String, us
     ) {
         FormField(S.fieldNameOptional, name, { name = it })
         FormField(S.fieldServerUrl, url, { url = it }, keyboardType = KeyboardType.Uri,
-            placeholder = "http://provider.com:8080")
+            placeholder = "http://provider.com:8080", autoFocus = true)
         FormField(S.fieldUsername, user, { user = it })
         FormField(S.fieldPassword, pass, { pass = it }, password = true)
     }
@@ -175,7 +180,7 @@ fun M3uDialog(onDismiss: () -> Unit, onSubmit: (name: String, url: String) -> Un
     ) {
         FormField(S.fieldNameOptional, name, { name = it })
         FormField(S.fieldPlaylistUrl, url, { url = it }, keyboardType = KeyboardType.Uri,
-            placeholder = "https://host.tld/playlist.m3u")
+            placeholder = "https://host.tld/playlist.m3u", autoFocus = true)
     }
 }
 
@@ -194,7 +199,7 @@ fun StalkerDialog(onDismiss: () -> Unit, onSubmit: (name: String, url: String, m
     ) {
         FormField(S.fieldNameOptional, name, { name = it })
         FormField(S.fieldPortalUrl, url, { url = it }, keyboardType = KeyboardType.Uri,
-            placeholder = "http://host:8080")
+            placeholder = "http://host:8080", autoFocus = true)
         FormField(S.fieldDeviceMac, mac, { mac = it.uppercase() },
             placeholder = "00:1A:79:XX:XX:XX")
     }
