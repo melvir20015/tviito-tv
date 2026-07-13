@@ -19,6 +19,12 @@ enum class SidebarPosition { LEFT, TOP }
 enum class AppTheme { DARK, AMOLED, BLUE, LIGHT }
 enum class DefaultPlayer { INTERNAL, EXTERNAL }
 enum class LiveChannelSortMode { PROVIDER, ALPHA_ASC, ALPHA_DESC, FAVORITES_FIRST, MANUAL }
+enum class LiveLastMode { PLAYER_FULLSCREEN, CHANNEL_LIST, TV_GUIDE }
+
+data class LiveButtonAssignment(
+    val button: String,
+    val action: String,
+)
 
 data class UserPrefs(
     val sidebarPosition: SidebarPosition = SidebarPosition.LEFT,
@@ -54,6 +60,21 @@ data class UserPrefs(
      *  before explicit user and build-time configuration opt-in. */
     val telemetryEnabled: Boolean = false,
     val liveChannelSortMode: LiveChannelSortMode = LiveChannelSortMode.PROVIDER,
+    val liveLastChannelRemoteId: String = "",
+    val livePreviousChannelRemoteId: String = "",
+    val liveLastGroupId: String = "",
+    val liveLastPlaylistId: String = "",
+    val liveLastMode: LiveLastMode = LiveLastMode.PLAYER_FULLSCREEN,
+    val liveAutoplayPreview: Boolean = true,
+    val liveStayOnGuide: Boolean = false,
+    val liveOverlayAlpha: Float = 0.88f,
+    val liveControlsTimeoutMs: Long = 5_000L,
+    val liveAccentColor: String = "",
+    val liveFontScale: Float = 1.0f,
+    val liveReduceMotion: Boolean = false,
+    val livePreviewDebounceMs: Long = 350L,
+    val liveGroupPositions: Map<String, Int> = emptyMap(),
+    val liveButtonAssignments: Map<String, String> = emptyMap(),
 
     // Playback / TV-quality knobs — exposed in Settings.
     /** Buffer target in seconds. Media3's default is 15 s, which is decent but
@@ -95,6 +116,21 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val configPassword = stringPreferencesKey("config_password")
         val telemetry = booleanPreferencesKey("telemetry_enabled")
         val liveSort = stringPreferencesKey("live_channel_sort_mode")
+        val liveLastChannel = stringPreferencesKey("live_last_channel_remote_id")
+        val livePreviousChannel = stringPreferencesKey("live_previous_channel_remote_id")
+        val liveLastGroup = stringPreferencesKey("live_last_group_id")
+        val liveLastPlaylist = stringPreferencesKey("live_last_playlist_id")
+        val liveLastMode = stringPreferencesKey("live_last_mode")
+        val liveAutoplayPreview = booleanPreferencesKey("live_autoplay_preview")
+        val liveStayOnGuide = booleanPreferencesKey("live_stay_on_guide")
+        val liveOverlayAlpha = intPreferencesKey("live_overlay_alpha_permille")
+        val liveControlsTimeout = longPreferencesKey("live_controls_timeout_ms")
+        val liveAccentColor = stringPreferencesKey("live_accent_color")
+        val liveFontScale = intPreferencesKey("live_font_scale_permille")
+        val liveReduceMotion = booleanPreferencesKey("live_reduce_motion")
+        val livePreviewDebounce = longPreferencesKey("live_preview_debounce_ms")
+        val liveGroupPositions = stringPreferencesKey("live_group_positions")
+        val liveButtonAssignments = stringPreferencesKey("live_button_assignments")
         val bufferSec = intPreferencesKey("buffer_seconds")
         val autoFrameRate = booleanPreferencesKey("auto_frame_rate")
         val preferSwDec = booleanPreferencesKey("prefer_software_decoder")
@@ -122,6 +158,21 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             configPassword = p[Keys.configPassword] ?: "",
             telemetryEnabled = p[Keys.telemetry] ?: false,
             liveChannelSortMode = runCatching { enumValueOf<LiveChannelSortMode>(p[Keys.liveSort] ?: LiveChannelSortMode.PROVIDER.name) }.getOrDefault(LiveChannelSortMode.PROVIDER),
+            liveLastChannelRemoteId = p[Keys.liveLastChannel] ?: "",
+            livePreviousChannelRemoteId = p[Keys.livePreviousChannel] ?: "",
+            liveLastGroupId = p[Keys.liveLastGroup] ?: "",
+            liveLastPlaylistId = p[Keys.liveLastPlaylist] ?: "",
+            liveLastMode = runCatching { enumValueOf<LiveLastMode>(p[Keys.liveLastMode] ?: LiveLastMode.PLAYER_FULLSCREEN.name) }.getOrDefault(LiveLastMode.PLAYER_FULLSCREEN),
+            liveAutoplayPreview = p[Keys.liveAutoplayPreview] ?: true,
+            liveStayOnGuide = p[Keys.liveStayOnGuide] ?: false,
+            liveOverlayAlpha = ((p[Keys.liveOverlayAlpha] ?: 880).coerceIn(0, 1_000) / 1_000f),
+            liveControlsTimeoutMs = (p[Keys.liveControlsTimeout] ?: 5_000L).coerceIn(1_000L, 60_000L),
+            liveAccentColor = p[Keys.liveAccentColor] ?: "",
+            liveFontScale = ((p[Keys.liveFontScale] ?: 1_000).coerceIn(700, 1_500) / 1_000f),
+            liveReduceMotion = p[Keys.liveReduceMotion] ?: false,
+            livePreviewDebounceMs = (p[Keys.livePreviewDebounce] ?: 350L).coerceIn(0L, 5_000L),
+            liveGroupPositions = LivePrefsSerialization.parseGroupPositions(p[Keys.liveGroupPositions] ?: ""),
+            liveButtonAssignments = LivePrefsSerialization.parseButtonAssignments(p[Keys.liveButtonAssignments] ?: ""),
             bufferSeconds = p[Keys.bufferSec] ?: 30,
             autoFrameRate = p[Keys.autoFrameRate] ?: true,
             preferSoftwareDecoder = p[Keys.preferSwDec] ?: false,
@@ -148,6 +199,21 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setConfigPassword(pwd: String) = update { it[Keys.configPassword] = pwd }
     suspend fun setTelemetry(on: Boolean) = update { it[Keys.telemetry] = on }
     suspend fun setLiveChannelSortMode(mode: LiveChannelSortMode) = update { it[Keys.liveSort] = mode.name }
+    suspend fun setLiveLastChannelRemoteId(remoteId: String) = update { it[Keys.liveLastChannel] = remoteId }
+    suspend fun setLivePreviousChannelRemoteId(remoteId: String) = update { it[Keys.livePreviousChannel] = remoteId }
+    suspend fun setLiveLastGroupId(groupId: String) = update { it[Keys.liveLastGroup] = groupId }
+    suspend fun setLiveLastPlaylistId(playlistId: String) = update { it[Keys.liveLastPlaylist] = playlistId }
+    suspend fun setLiveLastMode(mode: LiveLastMode) = update { it[Keys.liveLastMode] = mode.name }
+    suspend fun setLiveAutoplayPreview(value: Boolean) = update { it[Keys.liveAutoplayPreview] = value }
+    suspend fun setLiveStayOnGuide(value: Boolean) = update { it[Keys.liveStayOnGuide] = value }
+    suspend fun setLiveOverlayAlpha(value: Float) = update { it[Keys.liveOverlayAlpha] = (value.coerceIn(0f, 1f) * 1_000).toInt() }
+    suspend fun setLiveControlsTimeoutMs(value: Long) = update { it[Keys.liveControlsTimeout] = value.coerceIn(1_000L, 60_000L) }
+    suspend fun setLiveAccentColor(value: String) = update { it[Keys.liveAccentColor] = value.trim() }
+    suspend fun setLiveFontScale(value: Float) = update { it[Keys.liveFontScale] = (value.coerceIn(0.7f, 1.5f) * 1_000).toInt() }
+    suspend fun setLiveReduceMotion(value: Boolean) = update { it[Keys.liveReduceMotion] = value }
+    suspend fun setLivePreviewDebounceMs(value: Long) = update { it[Keys.livePreviewDebounce] = value.coerceIn(0L, 5_000L) }
+    suspend fun setLiveGroupPositions(value: Map<String, Int>) = update { it[Keys.liveGroupPositions] = LivePrefsSerialization.serializeGroupPositions(value) }
+    suspend fun setLiveButtonAssignments(value: Map<String, String>) = update { it[Keys.liveButtonAssignments] = LivePrefsSerialization.serializeButtonAssignments(value) }
     suspend fun setBufferSeconds(v: Int) = update { it[Keys.bufferSec] = v.coerceIn(5, 300) }
     suspend fun setAutoFrameRate(v: Boolean) = update { it[Keys.autoFrameRate] = v }
     suspend fun setPreferSoftwareDecoder(v: Boolean) = update { it[Keys.preferSwDec] = v }
@@ -156,5 +222,102 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
 
     private suspend inline fun update(crossinline block: (androidx.datastore.preferences.core.MutablePreferences) -> Unit) {
         ctx.userPrefsDs.edit { block(it) }
+    }
+}
+
+object LivePrefsSerialization {
+    fun parseGroupPositions(raw: String): Map<String, Int> = parsePairs(raw)
+        .mapNotNull { (key, value) -> value.toIntOrNull()?.let { key to it } }
+        .toMap()
+
+    fun serializeGroupPositions(value: Map<String, Int>): String = value
+        .toSortedMap()
+        .map { "${escape(it.key)}=${it.value}" }
+        .joinToString("|")
+
+    fun parseButtonAssignments(raw: String): Map<String, String> = parsePairs(raw).toMap()
+
+    fun serializeButtonAssignments(value: Map<String, String>): String = value
+        .toSortedMap()
+        .map { "${escape(it.key)}=${escape(it.value)}" }
+        .joinToString("|")
+
+    private fun parsePairs(raw: String): List<Pair<String, String>> = splitEscaped(raw)
+        .asSequence()
+        .filter { it.isNotBlank() }
+        .mapNotNull { entry ->
+            val separator = findUnescapedEquals(entry)
+            if (separator <= 0) null else unescape(entry.take(separator)) to unescape(entry.drop(separator + 1))
+        }
+        .filter { (key, _) -> key.isNotBlank() }
+        .toList()
+
+    private fun splitEscaped(raw: String): List<String> {
+        val parts = mutableListOf<String>()
+        val current = StringBuilder()
+        var escaping = false
+        raw.forEach { char ->
+            if (escaping) {
+                current.append('\\').append(char)
+                escaping = false
+            } else if (char == '\\') {
+                escaping = true
+            } else if (char == '|') {
+                parts += current.toString()
+                current.clear()
+            } else {
+                current.append(char)
+            }
+        }
+        if (escaping) current.append('\\')
+        parts += current.toString()
+        return parts
+    }
+
+    private fun findUnescapedEquals(value: String): Int {
+        var escaping = false
+        value.forEachIndexed { index, char ->
+            if (escaping) {
+                escaping = false
+            } else if (char == '\\') {
+                escaping = true
+            } else if (char == '=') {
+                return index
+            }
+        }
+        return -1
+    }
+
+    private fun escape(value: String): String = buildString {
+        value.forEach { char ->
+            when (char) {
+                '\\' -> append("\\\\")
+                '|' -> append("\\p")
+                '=' -> append("\\e")
+                else -> append(char)
+            }
+        }
+    }
+
+    private fun unescape(value: String): String = buildString {
+        var escaping = false
+        value.forEach { char ->
+            if (escaping) {
+                append(
+                    when (char) {
+                        'p' -> '|'
+                        'e' -> '='
+                        '\\' -> '\\'
+                        else -> char
+                    },
+                )
+                escaping = false
+            } else if (char == '\\') {
+                escaping = true
+            } else {
+                append(char)
+            }
+        }
+        if (escaping) append('\\')
     }
 }

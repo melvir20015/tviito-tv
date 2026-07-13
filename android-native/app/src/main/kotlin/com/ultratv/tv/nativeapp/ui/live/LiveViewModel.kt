@@ -7,6 +7,7 @@ import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.prefs.HiddenCategoriesStore
 import com.ultratv.tv.nativeapp.data.prefs.LiveChannelSortMode
 import com.ultratv.tv.nativeapp.data.prefs.LockedChannelsStore
+import com.ultratv.tv.nativeapp.data.prefs.UserPrefs
 import com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore
 import com.ultratv.tv.nativeapp.data.repo.CatalogRepository
 import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
@@ -124,6 +125,10 @@ class LiveViewModel @Inject constructor(
         .map { it.liveChannelSortMode }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveChannelSortMode.PROVIDER)
+
+    val livePreferences: StateFlow<UserPrefs> = userPrefs.flow
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPrefs())
 
     val showChannelNumbers: StateFlow<Boolean> = userPrefs.flow
         .map { it.showChannelNumbers }
@@ -270,8 +275,19 @@ class LiveViewModel @Inject constructor(
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val initialLiveTvUiState: StateFlow<LiveTvUiState> =
+        combine(livePreferences, channels) { prefs, list ->
+            prefs.toLiveTvUiState(
+                channelIds = list.map { it.id },
+                lastChannelId = list.firstOrNull { it.remoteId == prefs.liveLastChannelRemoteId }?.id,
+            )
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UserPrefs().toLiveTvUiState())
+
     fun setQuery(q: String) { _query.value = q }
-    fun selectCategory(remoteId: String) { _selectedCategory.value = remoteId }
+    fun selectCategory(remoteId: String) {
+        _selectedCategory.value = remoteId
+        viewModelScope.launch { userPrefs.setLiveLastGroupId(remoteId) }
+    }
 
     /**
      * Full programme list for the channel the user is hovering, used by the
@@ -299,6 +315,13 @@ class LiveViewModel @Inject constructor(
         // player can D-pad UP/DOWN through it without going back.
         zapQueue.set(channels.value, channel)
         fun register(url: String) {
+            viewModelScope.launch {
+                val previous = livePreferences.value.liveLastChannelRemoteId
+                if (previous.isNotBlank() && previous != channel.remoteId) {
+                    userPrefs.setLivePreviousChannelRemoteId(previous)
+                }
+                userPrefs.setLiveLastChannelRemoteId(channel.remoteId)
+            }
             playback.set(PlaybackContext.Item(
                 providerId = channel.providerId,
                 kind = "LIVE",

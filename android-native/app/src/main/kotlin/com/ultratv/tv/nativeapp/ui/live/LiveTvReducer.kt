@@ -1,5 +1,8 @@
 package com.ultratv.tv.nativeapp.ui.live
 
+import com.ultratv.tv.nativeapp.data.prefs.LiveLastMode
+import com.ultratv.tv.nativeapp.data.prefs.UserPrefs
+
 /** Explicit modes for the Live TV experience. */
 enum class LiveTvMode {
     PLAYER_FULLSCREEN,
@@ -36,12 +39,59 @@ data class LiveTvUiState(
     val activePlaylistId: String? = null,
     val lastChannelByGroup: Map<String, Long> = emptyMap(),
     val verticalPositionByGroup: Map<String, Int> = emptyMap(),
+    val previousChannelRemoteId: String? = null,
+    val autoplayPreview: Boolean = true,
+    val stayOnGuide: Boolean = false,
+    val overlayAlpha: Float = 0.88f,
+    val controlsTimeoutMs: Long = 5_000L,
+    val accentColor: String = "",
+    val fontScale: Float = 1.0f,
+    val reduceMotion: Boolean = false,
+    val previewDebounceMs: Long = 350L,
+    val buttonAssignments: Map<String, String> = emptyMap(),
     val epgHorizontalOffsetMs: Long = 0L,
     val openedFromMode: LiveTvMode? = null,
     val videoSurfaceMode: LiveTvVideoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN,
     val previewState: LiveTvLoadState = LiveTvLoadState(),
     val playerState: LiveTvLoadState = LiveTvLoadState(),
 )
+
+fun UserPrefs.toLiveTvUiState(
+    channelIds: List<Long> = emptyList(),
+    lastChannelId: Long? = null,
+): LiveTvUiState {
+    val initialMode = when (liveLastMode) {
+        LiveLastMode.PLAYER_FULLSCREEN -> LiveTvMode.PLAYER_FULLSCREEN
+        LiveLastMode.CHANNEL_LIST -> LiveTvMode.CHANNEL_LIST_OVERLAY
+        LiveLastMode.TV_GUIDE -> LiveTvMode.TV_GUIDE
+    }
+    val initialChannelId = lastChannelId ?: channelIds.firstOrNull()
+    return LiveTvUiState(
+        mode = if (liveStayOnGuide) LiveTvMode.TV_GUIDE else initialMode,
+        channelIds = channelIds,
+        focusedChannelId = initialChannelId,
+        selectedChannelId = initialChannelId,
+        playingChannelId = initialChannelId,
+        activeGroupId = liveLastGroupId.ifBlank { null },
+        activePlaylistId = liveLastPlaylistId.ifBlank { null },
+        previousChannelRemoteId = livePreviousChannelRemoteId.ifBlank { null },
+        autoplayPreview = liveAutoplayPreview,
+        stayOnGuide = liveStayOnGuide,
+        overlayAlpha = liveOverlayAlpha,
+        controlsTimeoutMs = liveControlsTimeoutMs,
+        accentColor = liveAccentColor,
+        fontScale = liveFontScale,
+        reduceMotion = liveReduceMotion,
+        previewDebounceMs = livePreviewDebounceMs,
+        verticalPositionByGroup = liveGroupPositions,
+        buttonAssignments = liveButtonAssignments,
+        videoSurfaceMode = if (liveStayOnGuide || initialMode != LiveTvMode.PLAYER_FULLSCREEN) {
+            LiveTvVideoSurfaceMode.PREVIEW
+        } else {
+            LiveTvVideoSurfaceMode.FULLSCREEN
+        },
+    )
+}
 
 sealed interface LiveTvAction {
     data class ChannelsChanged(val channelIds: List<Long>) : LiveTvAction
