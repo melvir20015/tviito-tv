@@ -1,6 +1,5 @@
 package com.ultratv.tv.nativeapp.ui.live
 
-import android.view.KeyEvent as AndroidKeyEvent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
@@ -47,8 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.nativeKeyEvent
-import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -162,17 +160,31 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = UltraTokens.EdgeGutter, vertical = 28.dp)
-            .onPreviewKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            .onKeyEvent { event ->
+                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {
                     Key.DirectionLeft, Key.Back -> {
                         if (level != LiveLevel.Categories) {
                             rememberedScroll[selected] = channelListState.firstVisibleItemIndex
-                            nav.back(); level = nav.level; true
-                        } else false
+                            nav.back()
+                            level = nav.level
+                            true
+                        } else {
+                            false
+                        }
                     }
-                    Key.ChannelUp -> { focusedChannelId = stepChannel(channels, focusedChannelId, -1); true }
-                    Key.ChannelDown -> { focusedChannelId = stepChannel(channels, focusedChannelId, 1); true }
+                    Key.DirectionRight -> {
+                        if (level == LiveLevel.Channels && focusedChannelId != null) {
+                            previewChannelId = focusedChannelId
+                            nav.clickChannel(focusedChannelId!!)
+                            level = nav.level
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    Key.DirectionUp, Key.DirectionDown -> false
+                    Key.Enter, Key.DirectionCenter -> false
                     else -> false
                 }
             },
@@ -200,7 +212,6 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
                             }
                         }
                     },
-                    onLongPress = { ch -> contextChannel = ch },
                 )
                 LiveLevel.Preview, LiveLevel.Fullscreen -> LivePreviewPanel(
                     channel = previewChannel,
@@ -219,11 +230,6 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     contextChannel?.let { ch -> ChannelContextMenu(ch, lockedKey(ch) in locked, onToggleLock = { vm.toggleLock(ch); contextChannel = null }, onDismiss = { contextChannel = null }) }
 }
 
-private fun stepChannel(list: List<ChannelEntity>, current: Long?, delta: Int): Long? {
-    if (list.isEmpty()) return null
-    val idx = list.indexOfFirst { it.id == current }.let { if (it < 0) 0 else it }
-    return list[(idx + delta).coerceIn(0, list.lastIndex)].id
-}
 private fun lockedKey(ch: ChannelEntity?) = ch?.let { "${it.providerId}:${it.remoteId}" } ?: ""
 
 @Composable
@@ -248,7 +254,7 @@ private fun CategoryPanel(items: List<LiveCategoryUi>, selected: String, request
 }
 
 @Composable
-private fun ChannelListPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit, onLongPress: (ChannelEntity) -> Unit) {
+private fun ChannelListPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit) {
     Column(modifier.focusRequester(requester)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -261,16 +267,16 @@ private fun ChannelListPanel(channels: List<ChannelEntity>, focusedId: Long?, ca
         if (channels.isEmpty()) Box(Modifier.fillMaxSize().background(UltraTokens.Surface1, RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Text("No hay canales disponibles.", color = UltraTokens.Fg3) }
         else LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(channels, key = { it.id }) { ch ->
-                ChannelRow(ch, channels.indexOf(ch) + 1, focusedId == ch.id, lockedKey(ch) in locked, showNumbers, nowNext[ch.id]?.first, nowNext[ch.id]?.second, onFocus, onChannelClick, onLongPress)
+                ChannelRow(ch, channels.indexOf(ch) + 1, focusedId == ch.id, lockedKey(ch) in locked, showNumbers, nowNext[ch.id]?.first, nowNext[ch.id]?.second, onFocus, onChannelClick)
             }
         }
     }
 }
 
 @Composable
-private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, locked: Boolean, showNumber: Boolean, now: EpgEntity?, next: EpgEntity?, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onLongPress: (ChannelEntity) -> Unit) {
+private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, locked: Boolean, showNumber: Boolean, now: EpgEntity?, next: EpgEntity?, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit) {
     val scale = if (focused) 1.015f else 1f
-    Card(onClick = { onPlay(ch) }, shape = CardDefaults.shape(RoundedCornerShape(16.dp)), colors = CardDefaults.colors(containerColor = if (focused) UltraTokens.Surface2 else UltraTokens.Surface1), modifier = Modifier.fillMaxWidth().scale(scale).border(if (focused) 2.dp else 1.dp, if (focused) UltraTokens.Accent else UltraTokens.Line, RoundedCornerShape(16.dp)).onFocusEventCompat { onFocus(ch) }.onPreviewKeyEvent { e -> if (e.nativeKeyEvent.keyCode == AndroidKeyEvent.KEYCODE_DPAD_CENTER && e.nativeKeyEvent.isLongPress) { onLongPress(ch); true } else false }) {
+    Card(onClick = { onPlay(ch) }, shape = CardDefaults.shape(RoundedCornerShape(16.dp)), colors = CardDefaults.colors(containerColor = if (focused) UltraTokens.Surface2 else UltraTokens.Surface1), modifier = Modifier.fillMaxWidth().scale(scale).border(if (focused) 2.dp else 1.dp, if (focused) UltraTokens.Accent else UltraTokens.Line, RoundedCornerShape(16.dp)).onFocusEventCompat { onFocus(ch) }) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showNumber) Text("%03d".format(number), color = UltraTokens.Fg4, fontFamily = UltraFonts.Mono, fontSize = 12.sp, modifier = Modifier.width(48.dp))
             ChannelLogo(ch.name, ch.logo, null, ch.name.hashCode(), null, 46.dp, false)
