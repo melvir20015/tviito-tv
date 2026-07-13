@@ -54,7 +54,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
@@ -68,15 +67,12 @@ import com.ultratv.tv.nativeapp.ui.common.ChannelLogo
 import com.ultratv.tv.nativeapp.ui.common.prettyCategoryName
 import com.ultratv.tv.nativeapp.ui.theme.UltraFonts
 import com.ultratv.tv.nativeapp.ui.theme.UltraTokens
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 private data class LiveCategoryUi(val id: String, val title: String, val count: Int? = null)
-private enum class PreviewState { Idle, Loading, Ready, Buffering, Error, Locked }
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
@@ -295,28 +291,29 @@ private fun Modifier.onFocusEventCompat(block: () -> Unit) = this.then(Modifier.
 @Composable
 private fun LivePreviewPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, focused: Boolean, requester: FocusRequester, vm: LiveViewModel, modifier: Modifier = Modifier, onBack: () -> Unit, onPlay: () -> Unit) {
     val context = LocalContext.current
-    var state by remember(channel?.id, locked) { mutableStateOf(if (locked) PreviewState.Locked else PreviewState.Idle) }
-    var resolverJob by remember { mutableStateOf<Job?>(null) }
     val player = remember { ExoPlayer.Builder(context).build().apply { volume = 0f; playWhenReady = true } }
-    DisposableEffect(player) { onDispose { resolverJob?.cancel(); player.release() } }
-    DisposableEffect(player) { val l = object : Player.Listener { override fun onPlaybackStateChanged(playbackState: Int) { state = when (playbackState) { Player.STATE_BUFFERING -> PreviewState.Buffering; Player.STATE_READY -> PreviewState.Ready; else -> state } }; override fun onPlayerError(error: androidx.media3.common.PlaybackException) { state = PreviewState.Error } }; player.addListener(l); onDispose { player.removeListener(l) } }
+    val coordinator = vm.previewCoordinator
+    val state by coordinator.state.collectAsState()
+    val controller = remember(player) {
+        object : PreviewPlayerController {
+            override fun stop() { player.stop(); player.clearMediaItems() }
+            override fun play(url: String) { player.setMediaItem(androidx.media3.common.MediaItem.fromUri(url)); player.prepare() }
+        }
+    }
+    DisposableEffect(player) { onDispose { coordinator.clear(controller); player.release() } }
+    DisposableEffect(player) { val l = object : Player.Listener { override fun onPlaybackStateChanged(playbackState: Int) { when (playbackState) { Player.STATE_BUFFERING -> coordinator.onBuffering(); Player.STATE_READY -> coordinator.onPlaying() } }; override fun onPlayerError(error: androidx.media3.common.PlaybackException) { coordinator.onError(error.message) } }; player.addListener(l); onDispose { player.removeListener(l) } }
     val scope = rememberCoroutineScope()
     LaunchedEffect(channel?.id, locked) {
-        resolverJob?.cancel()
-        player.stop()
-        if (channel == null || locked) { state = if (locked) PreviewState.Locked else PreviewState.Idle; return@LaunchedEffect }
-        resolverJob = scope.launch {
-            delay(280)
-            state = PreviewState.Loading
-            runCatching { vm.resolvePreviewUrl(channel) }.onSuccess { url -> player.setMediaItem(MediaItem.fromUri(url)); player.prepare() }.onFailure { state = PreviewState.Error }
-        }
+        coordinator.request(scope, channel, locked, controller)
     }
     Row(modifier.focusRequester(requester), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(0.66f).fillMaxHeight(), contentAlignment = Alignment.Center) {
-            Box(Modifier.fillMaxWidth().aspectRatio(16 / 9f).clip(RoundedCornerShape(24.dp)).background(Color.Black).border(if (focused) 2.dp else 1.dp, if (focused) UltraTokens.Accent else UltraTokens.Line2, RoundedCornerShape(24.dp)), contentAlignment = Alignment.Center) {
-                AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
-                if (state != PreviewState.Ready) Text(previewText(state), color = UltraTokens.Fg, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-            }
+            LivePreviewSurface(
+                player = player,
+                state = state,
+                focused = focused,
+                modifier = Modifier.fillMaxWidth().aspectRatio(16 / 9f),
+            )
         }
         Column(Modifier.weight(0.34f).fillMaxHeight()) {
             Text("Vista previa", color = UltraTokens.Fg3, fontSize = 12.sp, letterSpacing = 2.sp)
@@ -338,7 +335,44 @@ private fun LivePreviewPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgE
         }
     }
 }
-private fun previewText(s: PreviewState) = when (s) { PreviewState.Idle -> "Vista previa"; PreviewState.Loading -> "Conectando…"; PreviewState.Buffering -> "Buffering…"; PreviewState.Error -> "No se pudo cargar la vista previa"; PreviewState.Locked -> "Canal bloqueado"; PreviewState.Ready -> "" }
+@Composable
+private fun LivePreviewSurface(
+    player: ExoPlayer,
+    state: PreviewPlaybackState,
+    focused: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.Black)
+            .border(
+                if (focused) 2.dp else 1.dp,
+                if (focused) UltraTokens.Accent else UltraTokens.Line2,
+                RoundedCornerShape(24.dp),
+            ),
+        contentAlignment = Alignment.Center,
+    ) {
+        AndroidView(
+            factory = { PlayerView(it).apply { useController = false; this.player = player } },
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (state != PreviewPlaybackState.Playing) {
+            Text(previewText(state), color = UltraTokens.Fg, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+        }
+    }
+}
+
+private fun previewText(s: PreviewPlaybackState) = when (s) {
+    PreviewPlaybackState.Idle -> "Vista previa"
+    PreviewPlaybackState.Connecting -> "Conectando…"
+    PreviewPlaybackState.Buffering -> "Buffering…"
+    PreviewPlaybackState.Playing -> ""
+    PreviewPlaybackState.Reconnecting -> "Reconectando…"
+    is PreviewPlaybackState.Failed -> "No se pudo cargar la vista previa"
+    is PreviewPlaybackState.Unsupported -> "Stream no soportado"
+    PreviewPlaybackState.Locked -> "Canal bloqueado"
+}
 
 @Composable
 private fun ProgramInformation(now: EpgEntity?, next: EpgEntity?, compact: Boolean) { Column { Text(now?.title ?: "Sin EPG ahora", color = if (now == null) UltraTokens.Fg4 else UltraTokens.Fg2, fontSize = if (compact) 12.sp else 16.sp, maxLines = if (compact) 1 else 2); next?.let { Text("Luego: ${it.title}", color = UltraTokens.Fg4, fontSize = if (compact) 11.sp else 13.sp, maxLines = 1) }; if (!compact && now != null) Text("${fmt(now.startMs)} - ${fmt(now.endMs)}", color = UltraTokens.Fg3, fontFamily = UltraFonts.Mono, fontSize = 12.sp) } }

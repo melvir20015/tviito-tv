@@ -74,6 +74,7 @@ class LiveViewModel @Inject constructor(
     private val zapQueue: com.ultratv.tv.nativeapp.data.repo.LivePlaybackQueue,
     private val reminders: com.ultratv.tv.nativeapp.data.reminders.RemindersScheduler,
     private val channelDao: com.ultratv.tv.nativeapp.data.db.ChannelDao,
+    val previewCoordinator: PreviewCoordinator,
 ) : ViewModel() {
 
     /**
@@ -291,16 +292,6 @@ class LiveViewModel @Inject constructor(
         val startOfDay = cal.timeInMillis
         val endOfTomorrow = startOfDay + 48 * 60 * 60 * 1000L
         return epgDao.forChannelInRange(channelId, startOfDay, endOfTomorrow)
-    }
-
-    /**
-     * Resolves the play URL for a channel without seeding the zap queue or
-     * sending the user to the full-screen player. Used by the right-hand
-     * mini-preview pane in Live TV.
-     */
-    suspend fun resolvePreviewUrl(channel: ChannelEntity): String {
-        if (!channel.streamUrl.startsWith("stalker://")) return channel.streamUrl
-        return provider.resolvePlayUrl(channel.id, channel.streamUrl)
     }
 
     fun resolveAndPlay(channel: ChannelEntity, onReady: (url: String, title: String) -> Unit) {
