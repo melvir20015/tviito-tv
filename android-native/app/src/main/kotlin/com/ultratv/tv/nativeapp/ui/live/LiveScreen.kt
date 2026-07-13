@@ -158,6 +158,13 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
                     }
                 }
 
+                LiveBottomCarousel(
+                    currentChannel = active,
+                    channels = chans.take(10),
+                    onChannel = { ch -> activeChannelId = ch.id; vm.resolveAndPlay(ch, onPlay) },
+                    modifier = Modifier.fillMaxWidth().height(92.dp),
+                )
+
                 val listState = rememberLazyListState()
                 LaunchedEffect(selected) { listState.scrollToItem(0) }
                 if (chans.isEmpty()) {
@@ -283,6 +290,52 @@ private fun SortModeRow(sortMode: LiveChannelSortMode, onSelect: (LiveChannelSor
                     maxLines = 1,
                 )
             }
+        }
+    }
+}
+
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@Composable
+private fun LiveBottomCarousel(
+    currentChannel: ChannelEntity?,
+    channels: List<ChannelEntity>,
+    onChannel: (ChannelEntity) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
+    androidx.compose.foundation.lazy.LazyRow(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+    ) {
+        item("guide") { CarouselCard(S.tvGuide, S.liveNow, onClick = {}) }
+        item("history") { CarouselCard(S.homeRecentlyWatched, S.liveThen, onClick = {}) }
+        items(channels, key = { it.id }) { ch ->
+            CarouselCard(
+                title = ch.name,
+                subtitle = if (ch.id == currentChannel?.id) S.liveOnAirPill else S.liveWatchChannel,
+                onClick = { onChannel(ch) },
+            )
+        }
+    }
+}
+
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@Composable
+private fun CarouselCard(title: String, subtitle: String, onClick: () -> Unit) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier.width(180.dp).fillMaxHeight(),
+        shape = CardDefaults.shape(RoundedCornerShape(18.dp)),
+        colors = com.ultratv.tv.nativeapp.ui.theme.ultraCardColors(
+            containerColor = UltraTokens.Surface1.copy(alpha = 0.82f),
+            focusedContainerColor = UltraTokens.Accent,
+            focusedContentColor = Color.White,
+        ),
+    ) {
+        Column(Modifier.fillMaxSize().padding(14.dp), verticalArrangement = Arrangement.SpaceBetween) {
+            Text(title, color = UltraTokens.Fg, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(subtitle.uppercase(), color = UltraTokens.Fg3, fontSize = 10.sp, letterSpacing = 1.4.sp, maxLines = 1)
         }
     }
 }
