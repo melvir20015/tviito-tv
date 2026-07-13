@@ -102,6 +102,7 @@ sealed interface LiveTvAction {
     data object LongBack : LiveTvAction
     data object ZapUp : LiveTvAction
     data object ZapDown : LiveTvAction
+    data class NumberInput(val digit: Int) : LiveTvAction
     data class FocusChannel(val channelId: Long) : LiveTvAction
     data class FocusProgram(val programId: Long?) : LiveTvAction
     data class SelectGroup(val groupId: String, val fallbackChannelId: Long? = null) : LiveTvAction
@@ -125,6 +126,7 @@ object LiveTvReducer {
         LiveTvAction.LongBack -> state.toFullscreen()
         LiveTvAction.ZapUp -> state.zap(step = -1)
         LiveTvAction.ZapDown -> state.zap(step = 1)
+        is LiveTvAction.NumberInput -> state
         is LiveTvAction.FocusChannel -> state.focusChannel(action.channelId)
         is LiveTvAction.FocusProgram -> state.copy(focusedProgramId = action.programId)
         is LiveTvAction.SelectGroup -> state.selectGroup(action.groupId, action.fallbackChannelId)

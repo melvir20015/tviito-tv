@@ -28,6 +28,7 @@ class UserPreferencesLivePrefsTest {
         assertEquals(350L, prefs.livePreviewDebounceMs)
         assertEquals(emptyMap<String, Int>(), prefs.liveGroupPositions)
         assertEquals(emptyMap<String, String>(), prefs.liveButtonAssignments)
+        assertEquals(emptyMap<String, String>(), prefs.liveRemoteActionAssignments)
     }
 
     @Test
@@ -52,6 +53,18 @@ class UserPreferencesLivePrefsTest {
         val encoded = LivePrefsSerialization.serializeButtonAssignments(assignments)
 
         assertEquals(assignments.toSortedMap(), LivePrefsSerialization.parseButtonAssignments(encoded).toSortedMap())
+    }
+
+    @Test
+    fun `remote action assignment serialization round trips escaped surfaces commands and actions`() {
+        val assignments = mapOf(
+            "PLAYER:LONG_OK" to "OPEN_CONTEXT_MENU",
+            "TV_GUIDE:LEFT" to "MOVE=LEFT|GRID",
+        )
+
+        val encoded = LivePrefsSerialization.serializeRemoteActionAssignments(assignments)
+
+        assertEquals(assignments.toSortedMap(), LivePrefsSerialization.parseRemoteActionAssignments(encoded).toSortedMap())
     }
 
     @Test

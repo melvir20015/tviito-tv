@@ -75,6 +75,8 @@ data class UserPrefs(
     val livePreviewDebounceMs: Long = 350L,
     val liveGroupPositions: Map<String, Int> = emptyMap(),
     val liveButtonAssignments: Map<String, String> = emptyMap(),
+    /** Serialized as SURFACE:COMMAND=ACTION_TOKEN for future Settings remapping. */
+    val liveRemoteActionAssignments: Map<String, String> = emptyMap(),
 
     // Playback / TV-quality knobs — exposed in Settings.
     /** Buffer target in seconds. Media3's default is 15 s, which is decent but
@@ -131,6 +133,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val livePreviewDebounce = longPreferencesKey("live_preview_debounce_ms")
         val liveGroupPositions = stringPreferencesKey("live_group_positions")
         val liveButtonAssignments = stringPreferencesKey("live_button_assignments")
+        val liveRemoteActionAssignments = stringPreferencesKey("live_remote_action_assignments")
         val bufferSec = intPreferencesKey("buffer_seconds")
         val autoFrameRate = booleanPreferencesKey("auto_frame_rate")
         val preferSwDec = booleanPreferencesKey("prefer_software_decoder")
@@ -173,6 +176,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             livePreviewDebounceMs = (p[Keys.livePreviewDebounce] ?: 350L).coerceIn(0L, 5_000L),
             liveGroupPositions = LivePrefsSerialization.parseGroupPositions(p[Keys.liveGroupPositions] ?: ""),
             liveButtonAssignments = LivePrefsSerialization.parseButtonAssignments(p[Keys.liveButtonAssignments] ?: ""),
+            liveRemoteActionAssignments = LivePrefsSerialization.parseRemoteActionAssignments(p[Keys.liveRemoteActionAssignments] ?: ""),
             bufferSeconds = p[Keys.bufferSec] ?: 30,
             autoFrameRate = p[Keys.autoFrameRate] ?: true,
             preferSoftwareDecoder = p[Keys.preferSwDec] ?: false,
@@ -214,6 +218,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setLivePreviewDebounceMs(value: Long) = update { it[Keys.livePreviewDebounce] = value.coerceIn(0L, 5_000L) }
     suspend fun setLiveGroupPositions(value: Map<String, Int>) = update { it[Keys.liveGroupPositions] = LivePrefsSerialization.serializeGroupPositions(value) }
     suspend fun setLiveButtonAssignments(value: Map<String, String>) = update { it[Keys.liveButtonAssignments] = LivePrefsSerialization.serializeButtonAssignments(value) }
+    suspend fun setLiveRemoteActionAssignments(value: Map<String, String>) = update { it[Keys.liveRemoteActionAssignments] = LivePrefsSerialization.serializeRemoteActionAssignments(value) }
     suspend fun setBufferSeconds(v: Int) = update { it[Keys.bufferSec] = v.coerceIn(5, 300) }
     suspend fun setAutoFrameRate(v: Boolean) = update { it[Keys.autoFrameRate] = v }
     suspend fun setPreferSoftwareDecoder(v: Boolean) = update { it[Keys.preferSwDec] = v }
@@ -237,7 +242,14 @@ object LivePrefsSerialization {
 
     fun parseButtonAssignments(raw: String): Map<String, String> = parsePairs(raw).toMap()
 
+    fun parseRemoteActionAssignments(raw: String): Map<String, String> = parsePairs(raw).toMap()
+
     fun serializeButtonAssignments(value: Map<String, String>): String = value
+        .toSortedMap()
+        .map { "${escape(it.key)}=${escape(it.value)}" }
+        .joinToString("|")
+
+    fun serializeRemoteActionAssignments(value: Map<String, String>): String = value
         .toSortedMap()
         .map { "${escape(it.key)}=${escape(it.value)}" }
         .joinToString("|")
