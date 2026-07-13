@@ -28,6 +28,9 @@ import javax.inject.Inject
 
 /** Sentinel category remoteId meaning "show every channel". */
 const val CATEGORY_ALL = "__all__"
+const val CATEGORY_FAVORITES = "__favorites__"
+const val CATEGORY_RECENTS = "__recents__"
+const val CATEGORY_HISTORY = "__history__"
 
 private data class LiveInputs(
     val providers: List<com.ultratv.tv.nativeapp.data.db.ProviderEntity>,
@@ -66,6 +69,7 @@ class LiveViewModel @Inject constructor(
     private val lockedStore: LockedChannelsStore,
     private val userPrefs: UserPreferencesStore,
     private val playback: PlaybackContext,
+    private val history: com.ultratv.tv.nativeapp.data.repo.HistoryRepository,
     private val epgDaoArg: com.ultratv.tv.nativeapp.data.db.EpgDao,
     private val zapQueue: com.ultratv.tv.nativeapp.data.repo.LivePlaybackQueue,
     private val reminders: com.ultratv.tv.nativeapp.data.reminders.RemindersScheduler,
@@ -239,19 +243,28 @@ class LiveViewModel @Inject constructor(
             val pid = ps.firstOrNull { it.active }?.id ?: ps.firstOrNull()?.id
             if (pid == null) flowOf(emptyList())
             else {
-                val base = if (cat == CATEGORY_ALL) {
-                    catalog.channels(pid).map { list ->
-                        list.filter { ch ->
-                            val cid = ch.categoryId ?: return@filter true
-                            hiddenStore.keyFor("LIVE", pid, cid) !in hidden
-                        }
+                val allVisible = catalog.channels(pid).map { list ->
+                    list.filter { ch ->
+                        val cid = ch.categoryId ?: return@filter true
+                        hiddenStore.keyFor("LIVE", pid, cid) !in hidden
                     }
-                } else {
-                    catalog.channelsForCategory(pid, cat)
                 }
-                combine(base, catalog.favoritesByKind(pid, "LIVE")) { all, favs ->
+                val favFlow = catalog.favoritesByKind(pid, "LIVE")
+                val base = when (cat) {
+                    CATEGORY_ALL -> allVisible
+                    CATEGORY_FAVORITES -> combine(allVisible, favFlow) { all, favs ->
+                        val ids = favs.map { it.remoteId }.toSet()
+                        all.filter { it.remoteId in ids }
+                    }
+                    CATEGORY_RECENTS, CATEGORY_HISTORY -> combine(allVisible, history.recentByKind(pid, "LIVE", 60)) { all, rows ->
+                        val byRemote = all.associateBy { it.remoteId }
+                        rows.mapNotNull { byRemote[it.remoteId] }.distinctBy { it.id }
+                    }
+                    else -> catalog.channelsForCategory(pid, cat)
+                }
+                combine(base, favFlow) { all, favs ->
                     val favIds = favs.map { it.remoteId }.toSet()
-                    sortLiveChannels(all, favIds, mode)
+                    if (cat == CATEGORY_RECENTS || cat == CATEGORY_HISTORY) all else sortLiveChannels(all, favIds, mode)
                 }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
