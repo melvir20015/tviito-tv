@@ -142,6 +142,13 @@ class LiveViewModel @Inject constructor(
     val lockedChannels: StateFlow<Set<String>> = lockedStore.locked
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
 
+    private val providers = provider.observeProviders()
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _selectedCategory = MutableStateFlow<String>(CATEGORY_ALL)
+    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
+
     // EPG now/next per channel for the current visible list. We re-query every
     // 60s as well as whenever the channel list changes; rangeForChannels with
     // an IN(...) on a few hundred ids is fast (indices on channelId).
@@ -214,9 +221,6 @@ class LiveViewModel @Inject constructor(
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
-    private val _selectedCategory = MutableStateFlow<String>(CATEGORY_ALL)
-    val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
-
     private val _resolving = MutableStateFlow(false)
     val resolving: StateFlow<Boolean> = _resolving.asStateFlow()
 
@@ -232,10 +236,6 @@ class LiveViewModel @Inject constructor(
             try { provider.syncAll(pid) } finally { _refreshing.value = false }
         }
     }
-
-    private val providers = provider.observeProviders()
-        .distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val categories: StateFlow<List<CategoryEntity>> =
         combine(providers, hiddenStore.hidden) { ps, hidden -> ps to hidden }
