@@ -8,18 +8,19 @@ import java.util.EnumMap
 /**
  * Lightweight inline translation table. We deliberately avoid the Android
  * resource framework because most of the UI text is inline in Compose;
- * externalising every literal would be a multi-day rewrite. Strings not in
- * the table fall through to their English literal — partial coverage is
- * better than no coverage.
+ * externalising every literal would be a multi-day rewrite. Supported
+ * user-visible languages are intentionally limited to English and Spanish.
+ * Spanish must provide explicit entries for every visible [StringKey] so
+ * selecting Spanish never falls back to mixed English UI text.
  */
-enum class AppLang(val code: String, val displayName: String, val rtl: Boolean = false) {
+enum class AppLang(val code: String, val displayName: String) {
     System("system", "System (auto)"),
     English("en", "English"),
-    French("fr", "Français"),
-    Spanish("es", "Español"),
-    Arabic("ar", "العربية", rtl = true);
+    Spanish("es", "Español");
 
     companion object {
+        val visibleEntries: List<AppLang> = listOf(System, English, Spanish)
+
         fun fromCode(code: String): AppLang = entries.firstOrNull { it.code == code } ?: System
     }
 }
@@ -43,6 +44,17 @@ enum class StringKey(val defaultValue: String) {
     HomeFeaturedChannels("Featured channels"),
     HomeFeaturedMovies("Movies"),
     HomeFeaturedSeries("Series"),
+    HomeHeroEyebrow("Featured · New season"),
+    HomeHeroSubtitle("A layered, luminous story that takes time to observe its characters with care."),
+    HomeHeroMultiAudio("Multi-audio"),
+    HomeMoreInfo("More info"),
+    HomeNowPlaying("Now playing"),
+    HomeWelcomeShort("Welcome."),
+    HomeForYou("For you"),
+    HomeCinemaEyebrow("Cinema"),
+    HomeSeriesEyebrow("Series"),
+    HomeLiveEyebrow("Live"),
+    HomeResumeLabel("Resume"),
     OnboardingMacLabel("Your device MAC:"),
     OnboardingOpenSettings("Open Settings"),
     OnboardingFirstTime("First-time setup"),
@@ -258,6 +270,20 @@ enum class StringKey(val defaultValue: String) {
     SearchRecent("Recent:"),
     SearchClear("Clear"),
     SearchNoMatches("No matches."),
+    SearchAll("All"),
+    SearchChannels("Channels"),
+    SearchSport("Sport"),
+    SearchDocumentary("Documentary"),
+    SearchResume("Resume"),
+    SearchTitle("Search"),
+    SearchStartTyping("Start typing to search."),
+    SearchResultsForTemplate("%1\$d RESULTS FOR"),
+    SearchLiveChannels("Live channels"),
+    SearchSpace("Space"),
+    SearchBackspace("⌫ Delete"),
+    MovieFeaturedEyebrow("Featured movie"),
+    SeriesFeaturedEyebrow("Featured series"),
+    ItemsLoadedTemplate("%1\$d titles loaded%2\$s"),
     RecordingsTitle("Recordings"),
     RecordingsEmpty("No recordings yet. Open a movie or episode and press the ⏺ Record button to queue a download."),
     RecordingStatusQueued("Queued"),
@@ -283,7 +309,7 @@ enum class StringKey(val defaultValue: String) {
 }
 
 class Strings(
-    private val overrides: Map<StringKey, String> = emptyMap(),
+    internal val overrides: Map<StringKey, String> = emptyMap(),
 ) {
     val navHome: String get() = overrides[StringKey.NavHome] ?: StringKey.NavHome.defaultValue
     val navLive: String get() = overrides[StringKey.NavLive] ?: StringKey.NavLive.defaultValue
@@ -303,6 +329,17 @@ class Strings(
     val homeFeaturedChannels: String get() = overrides[StringKey.HomeFeaturedChannels] ?: StringKey.HomeFeaturedChannels.defaultValue
     val homeFeaturedMovies: String get() = overrides[StringKey.HomeFeaturedMovies] ?: StringKey.HomeFeaturedMovies.defaultValue
     val homeFeaturedSeries: String get() = overrides[StringKey.HomeFeaturedSeries] ?: StringKey.HomeFeaturedSeries.defaultValue
+    val homeHeroEyebrow: String get() = overrides[StringKey.HomeHeroEyebrow] ?: StringKey.HomeHeroEyebrow.defaultValue
+    val homeHeroSubtitle: String get() = overrides[StringKey.HomeHeroSubtitle] ?: StringKey.HomeHeroSubtitle.defaultValue
+    val homeHeroMultiAudio: String get() = overrides[StringKey.HomeHeroMultiAudio] ?: StringKey.HomeHeroMultiAudio.defaultValue
+    val homeMoreInfo: String get() = overrides[StringKey.HomeMoreInfo] ?: StringKey.HomeMoreInfo.defaultValue
+    val homeNowPlaying: String get() = overrides[StringKey.HomeNowPlaying] ?: StringKey.HomeNowPlaying.defaultValue
+    val homeWelcomeShort: String get() = overrides[StringKey.HomeWelcomeShort] ?: StringKey.HomeWelcomeShort.defaultValue
+    val homeForYou: String get() = overrides[StringKey.HomeForYou] ?: StringKey.HomeForYou.defaultValue
+    val homeCinemaEyebrow: String get() = overrides[StringKey.HomeCinemaEyebrow] ?: StringKey.HomeCinemaEyebrow.defaultValue
+    val homeSeriesEyebrow: String get() = overrides[StringKey.HomeSeriesEyebrow] ?: StringKey.HomeSeriesEyebrow.defaultValue
+    val homeLiveEyebrow: String get() = overrides[StringKey.HomeLiveEyebrow] ?: StringKey.HomeLiveEyebrow.defaultValue
+    val homeResumeLabel: String get() = overrides[StringKey.HomeResumeLabel] ?: StringKey.HomeResumeLabel.defaultValue
     val onboardingMacLabel: String get() = overrides[StringKey.OnboardingMacLabel] ?: StringKey.OnboardingMacLabel.defaultValue
     val onboardingOpenSettings: String get() = overrides[StringKey.OnboardingOpenSettings] ?: StringKey.OnboardingOpenSettings.defaultValue
     val onboardingFirstTime: String get() = overrides[StringKey.OnboardingFirstTime] ?: StringKey.OnboardingFirstTime.defaultValue
@@ -518,6 +555,20 @@ class Strings(
     val searchRecent: String get() = overrides[StringKey.SearchRecent] ?: StringKey.SearchRecent.defaultValue
     val searchClear: String get() = overrides[StringKey.SearchClear] ?: StringKey.SearchClear.defaultValue
     val searchNoMatches: String get() = overrides[StringKey.SearchNoMatches] ?: StringKey.SearchNoMatches.defaultValue
+    val searchAll: String get() = overrides[StringKey.SearchAll] ?: StringKey.SearchAll.defaultValue
+    val searchChannels: String get() = overrides[StringKey.SearchChannels] ?: StringKey.SearchChannels.defaultValue
+    val searchSport: String get() = overrides[StringKey.SearchSport] ?: StringKey.SearchSport.defaultValue
+    val searchDocumentary: String get() = overrides[StringKey.SearchDocumentary] ?: StringKey.SearchDocumentary.defaultValue
+    val searchResume: String get() = overrides[StringKey.SearchResume] ?: StringKey.SearchResume.defaultValue
+    val searchTitle: String get() = overrides[StringKey.SearchTitle] ?: StringKey.SearchTitle.defaultValue
+    val searchStartTyping: String get() = overrides[StringKey.SearchStartTyping] ?: StringKey.SearchStartTyping.defaultValue
+    val searchResultsForTemplate: String get() = overrides[StringKey.SearchResultsForTemplate] ?: StringKey.SearchResultsForTemplate.defaultValue
+    val searchLiveChannels: String get() = overrides[StringKey.SearchLiveChannels] ?: StringKey.SearchLiveChannels.defaultValue
+    val searchSpace: String get() = overrides[StringKey.SearchSpace] ?: StringKey.SearchSpace.defaultValue
+    val searchBackspace: String get() = overrides[StringKey.SearchBackspace] ?: StringKey.SearchBackspace.defaultValue
+    val movieFeaturedEyebrow: String get() = overrides[StringKey.MovieFeaturedEyebrow] ?: StringKey.MovieFeaturedEyebrow.defaultValue
+    val seriesFeaturedEyebrow: String get() = overrides[StringKey.SeriesFeaturedEyebrow] ?: StringKey.SeriesFeaturedEyebrow.defaultValue
+    val itemsLoadedTemplate: String get() = overrides[StringKey.ItemsLoadedTemplate] ?: StringKey.ItemsLoadedTemplate.defaultValue
     val recordingsTitle: String get() = overrides[StringKey.RecordingsTitle] ?: StringKey.RecordingsTitle.defaultValue
     val recordingsEmpty: String get() = overrides[StringKey.RecordingsEmpty] ?: StringKey.RecordingsEmpty.defaultValue
     val recordingStatusQueued: String get() = overrides[StringKey.RecordingStatusQueued] ?: StringKey.RecordingStatusQueued.defaultValue
@@ -818,6 +869,18 @@ private val ES: Strings by lazy {
         put(StringKey.HomeRecentlyWatched, "Vistos recientemente")
         put(StringKey.HomeFeaturedChannels, "Canales destacados")
         put(StringKey.HomeFeaturedMovies, "Películas")
+        put(StringKey.HomeFeaturedSeries, "Series")
+        put(StringKey.HomeHeroEyebrow, "Destacado · Nueva temporada")
+        put(StringKey.HomeHeroSubtitle, "Una historia profunda y luminosa que se toma tiempo para observar a sus personajes con cuidado.")
+        put(StringKey.HomeHeroMultiAudio, "Varios audios")
+        put(StringKey.HomeMoreInfo, "Más información")
+        put(StringKey.HomeNowPlaying, "En emisión")
+        put(StringKey.HomeWelcomeShort, "Bienvenido.")
+        put(StringKey.HomeForYou, "Para ti")
+        put(StringKey.HomeCinemaEyebrow, "Cine")
+        put(StringKey.HomeSeriesEyebrow, "Series")
+        put(StringKey.HomeLiveEyebrow, "En vivo")
+        put(StringKey.HomeResumeLabel, "Reanudar")
         put(StringKey.OnboardingMacLabel, "MAC del dispositivo:")
         put(StringKey.OnboardingOpenSettings, "Abrir ajustes")
         put(StringKey.OnboardingFirstTime, "Configuración inicial")
@@ -898,6 +961,7 @@ private val ES: Strings by lazy {
         put(StringKey.SettingsSyncFromCloud, "Sync desde la nube")
         put(StringKey.SettingsAddProviderTitle, "➕ Añadir un proveedor")
         put(StringKey.SettingsAddProviderHint, "Pulsa un botón para abrir el formulario. El teclado solo aparece dentro del diálogo — no molesta al desplazarte por Ajustes.")
+        put(StringKey.SettingsAddXtream, "+ Xtream Codes")
         put(StringKey.SettingsAddM3uUrl, "+ URL M3U")
         put(StringKey.SettingsAddM3uFile, "+ Archivo M3U…")
         put(StringKey.SettingsAddStalker, "+ Portal Stalker")
@@ -924,6 +988,7 @@ private val ES: Strings by lazy {
         put(StringKey.PrefSidebar, "Barra lateral")
         put(StringKey.PrefTopBar, "Barra superior")
         put(StringKey.PrefThemeDark, "Oscuro")
+        put(StringKey.PrefThemeAmoled, "AMOLED")
         put(StringKey.PrefThemeBlue, "Azul")
         put(StringKey.PrefDefaultPlayer, "Reproductor por defecto")
         put(StringKey.PrefPlayerInternal, "Interno (Media3)")
@@ -947,6 +1012,7 @@ private val ES: Strings by lazy {
         put(StringKey.PrefInterval24, "Cada 24 h")
         put(StringKey.FavoritesEmpty, "Sin favoritos — abre una película o serie y pulsa ☆.")
         put(StringKey.FavoritesMoviesSection, "Películas — %1\$d")
+        put(StringKey.FavoritesSeriesSection, "Series — %1\$d")
         put(StringKey.DetailLoading, "Cargando…")
         put(StringKey.SeriesNoEpisodes, "No hay episodios disponibles.")
         put(StringKey.MultiViewTitle, "Multi-vista")
@@ -955,10 +1021,12 @@ private val ES: Strings by lazy {
         put(StringKey.RecordingsPlay, "Reproducir")
         put(StringKey.RecordingsOpenWith, "Abrir con…")
         put(StringKey.PlayerOff, "Apagado")
+        put(StringKey.PlayerAudioTemplate, "Audio (%1\$d)")
         put(StringKey.PlayerSubtitlesTemplate, "Subtítulos (%1\$d)")
         put(StringKey.LiveAllChannels, "Todos los canales")
         put(StringKey.LiveChannelsCountTemplate, "%1\$d canales")
         put(StringKey.LiveNoChannelsInCategory, "Sin canales en esta categoría.")
+        put(StringKey.LiveZappingEyebrow, "CAMBIO RÁPIDO")
         put(StringKey.LiveOnAirPill, "EN VIVO")
         put(StringKey.LiveThen, "después")
         put(StringKey.LiveDayScheduleEyebrow, "PROGRAMA DEL DÍA")
@@ -979,6 +1047,8 @@ private val ES: Strings by lazy {
         put(StringKey.RailOther, "Otros")
         put(StringKey.Open, "Abrir")
         put(StringKey.SleepLabel, "Suspender")
+        put(StringKey.SleepMin15, "15 min")
+        put(StringKey.SleepMin30, "30 min")
         put(StringKey.Sleep1h, "1 hora")
         put(StringKey.Sleep2h, "2 horas")
         put(StringKey.SleepCancel, "Cancelar temporizador")
@@ -1008,12 +1078,15 @@ private val ES: Strings by lazy {
         put(StringKey.MovieDetailPlot, "Sinopsis")
         put(StringKey.SeriesDetailEpisodes, "Episodios")
         put(StringKey.MoviesTitle, "Películas")
+        put(StringKey.SeriesTitle, "Series")
         put(StringKey.NoMovies, "Sin películas — añade un proveedor en ajustes y vuelve a sincronizar.")
         put(StringKey.NoSeries, "Sin series — añade un proveedor en ajustes y vuelve a sincronizar.")
         put(StringKey.PlayerSleep, "Suspender")
+        put(StringKey.PlayerStats, "Estadísticas")
         put(StringKey.PlayerTracks, "Pistas")
         put(StringKey.PlayerDisplay, "Pantalla")
         put(StringKey.PlayerExternal, "Reproductor externo")
+        put(StringKey.PlayerCast, "Enviar")
         put(StringKey.PlayerRecord, "Grabar")
         put(StringKey.PlayerAspect, "Aspecto")
         put(StringKey.PlayerSpeed, "Velocidad")
@@ -1022,6 +1095,20 @@ private val ES: Strings by lazy {
         put(StringKey.SearchRecent, "Recientes:")
         put(StringKey.SearchClear, "Limpiar")
         put(StringKey.SearchNoMatches, "Sin coincidencias.")
+        put(StringKey.SearchAll, "Todos")
+        put(StringKey.SearchChannels, "Canales")
+        put(StringKey.SearchSport, "Deportes")
+        put(StringKey.SearchDocumentary, "Documental")
+        put(StringKey.SearchResume, "Reanudar")
+        put(StringKey.SearchTitle, "Buscar")
+        put(StringKey.SearchStartTyping, "Empieza a escribir para buscar.")
+        put(StringKey.SearchResultsForTemplate, "%1\$d RESULTADOS PARA")
+        put(StringKey.SearchLiveChannels, "Canales en vivo")
+        put(StringKey.SearchSpace, "Espacio")
+        put(StringKey.SearchBackspace, "⌫ Borrar")
+        put(StringKey.MovieFeaturedEyebrow, "Película destacada")
+        put(StringKey.SeriesFeaturedEyebrow, "Serie destacada")
+        put(StringKey.ItemsLoadedTemplate, "%1\$d títulos cargados%2\$s")
         put(StringKey.RecordingsTitle, "Grabaciones")
         put(StringKey.RecordingsEmpty, "Aún no hay grabaciones. Abre una película o episodio y pulsa ⏺ Grabar.")
         put(StringKey.RecordingStatusQueued, "En cola")
@@ -1031,6 +1118,7 @@ private val ES: Strings by lazy {
         put(StringKey.RecordingStatusCancelled, "Cancelado")
         put(StringKey.Live, "TV en vivo")
         put(StringKey.Movies, "Películas")
+        put(StringKey.Series, "Series")
         put(StringKey.Categories, "Categorías")
         put(StringKey.TvGuide, "Guía TV")
         put(StringKey.Favorites, "Favoritos")
@@ -1302,16 +1390,16 @@ private val AR: Strings by lazy {
         put(StringKey.Change, "تغيير")
     }
 }
+fun missingSpanishTranslations(): List<StringKey> = StringKey.entries.filter { key -> ES.overrides[key].isNullOrBlank() }
+
 @Composable
 fun stringsFor(lang: AppLang): Strings {
     val resolved = if (lang == AppLang.System) {
         val sys = LocalConfiguration.current.locales.get(0)?.language ?: "en"
-        AppLang.entries.firstOrNull { it.code == sys } ?: AppLang.English
+        if (sys == AppLang.Spanish.code) AppLang.Spanish else AppLang.English
     } else lang
     return when (resolved) {
-        AppLang.French -> FR
         AppLang.Spanish -> ES
-        AppLang.Arabic -> AR
         else -> EN
     }
 }

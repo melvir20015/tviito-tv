@@ -43,7 +43,7 @@ data class UserPrefs(
     /** Suppresses the onboarding wizard. Flipped to `true` when the user
      *  dismisses or completes it. */
     val hasSeenOnboarding: Boolean = false,
-    /** UI language code: "system", "en", "fr", "es", "ar". */
+    /** UI language code: "system", "en", "es". */
     val language: String = "system",
     /** Per-MAC password used when fetching config from the worker. Optional —
      *  empty for unprotected entries. Persists across launches; never logged. */

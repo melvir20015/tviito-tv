@@ -101,7 +101,7 @@ fun PreferencesSection(vm: AppViewModel = hiltViewModel()) {
         }
 
         PrefRow(label = S.settingsLanguage) {
-            com.ultratv.tv.nativeapp.i18n.AppLang.entries.forEach { lang ->
+            com.ultratv.tv.nativeapp.i18n.AppLang.visibleEntries.forEach { lang ->
                 ChoiceChip(
                     label = lang.displayName,
                     on = p.language == lang.code,

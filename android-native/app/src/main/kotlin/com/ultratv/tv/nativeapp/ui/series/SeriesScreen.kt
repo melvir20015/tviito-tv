@@ -53,7 +53,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
     ) {
         if (railsMode && featured != null) {
             HeroBanner(
-                eyebrow = "Série du moment",
+                eyebrow = S.seriesFeaturedEyebrow,
                 title = featured!!.name,
                 subtitle = featured!!.plot,
                 meta = listOfNotNull(
@@ -63,7 +63,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
                 image = featured!!.poster,
                 primaryLabel = S.open,
                 onPrimary = { onOpen(featured!!.id) },
-                secondaryLabel = "Plus d'infos",
+                secondaryLabel = S.homeMoreInfo,
                 onSecondary = { onOpen(featured!!.id) },
             )
         } else {
@@ -93,7 +93,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
             rails.forEachIndexed { idx, rail ->
                 ContentRail(
                     title = rail.category?.name ?: S.railOther,
-                    eyebrow = if (idx == 0) "Séries" else null,
+                    eyebrow = if (idx == 0) S.homeSeriesEyebrow else null,
                     items = rail.items,
                     itemKey = { it.id },
                 ) { s ->
@@ -108,7 +108,7 @@ fun SeriesScreen(onOpen: (Long) -> Unit, vm: SeriesListViewModel = hiltViewModel
             Spacer(Modifier.height(40.dp))
         } else {
             val paged = vm.pagedSeries.collectAsLazyPagingItems()
-            Text("${paged.itemCount} titles loaded${if (paged.loadState.append is androidx.paging.LoadState.Loading) "…" else ""}",
+            Text(S.itemsLoadedTemplate.format(paged.itemCount, if (paged.loadState.append is androidx.paging.LoadState.Loading) "…" else ""),
                 fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 180.dp),

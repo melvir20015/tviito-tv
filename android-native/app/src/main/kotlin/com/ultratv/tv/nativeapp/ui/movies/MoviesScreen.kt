@@ -56,7 +56,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
     ) {
         if (railsMode && featured != null) {
             HeroBanner(
-                eyebrow = "Film du moment",
+                eyebrow = S.movieFeaturedEyebrow,
                 title = featured!!.name,
                 subtitle = featured!!.plot,
                 synopsis = null,
@@ -68,7 +68,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
                 image = featured!!.poster,
                 primaryLabel = S.open,
                 onPrimary = { onOpen(featured!!.id) },
-                secondaryLabel = "Plus d'infos",
+                secondaryLabel = S.homeMoreInfo,
                 onSecondary = { onOpen(featured!!.id) },
             )
         } else {
@@ -98,7 +98,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
             rails.forEachIndexed { idx, rail ->
                 ContentRail(
                     title = rail.category?.name ?: S.railOther,
-                    eyebrow = if (idx == 0) "Cinéma" else null,
+                    eyebrow = if (idx == 0) S.homeCinemaEyebrow else null,
                     items = rail.items,
                     itemKey = { it.id },
                 ) { m -> PosterCard(title = m.name, poster = m.poster, subtitle = m.year?.toString()) { onOpen(m.id) } }
@@ -108,7 +108,7 @@ fun MoviesScreen(onOpen: (Long) -> Unit, vm: MoviesViewModel = hiltViewModel()) 
             // Flat-grid mode (single category) — uses PagingData so a 50k-item
             // catalog only ever has ~120 items in memory at once.
             val paged = vm.pagedMovies.collectAsLazyPagingItems()
-            Text("${paged.itemCount} titles loaded${if (paged.loadState.append is androidx.paging.LoadState.Loading) "…" else ""}",
+            Text(S.itemsLoadedTemplate.format(paged.itemCount, if (paged.loadState.append is androidx.paging.LoadState.Loading) "…" else ""),
                 fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 180.dp),

@@ -54,7 +54,7 @@ private val navItems = listOf(
     NavEntry("guide",      { it.navGuide },      UltraIcon.Guide),
     NavEntry("favorites",  { it.navFavorites },  UltraIcon.Heart),
     NavEntry("categories", { it.navCategories }, UltraIcon.Folder),
-    NavEntry("recordings", { "Recordings" },     UltraIcon.Record),
+    NavEntry("recordings", { it.navRecordings }, UltraIcon.Record),
     NavEntry("settings",   { it.navSettings },   UltraIcon.Gear),
 )
 

@@ -73,25 +73,25 @@ fun HomeScreen(
         val heroItem = series.firstOrNull() ?: movies.firstOrNull()
         if (heroItem != null) {
             HeroBanner(
-                eyebrow = "À l'affiche · Nouvelle saison",
+                eyebrow = S.homeHeroEyebrow,
                 title = (heroItem as? com.ultratv.tv.nativeapp.data.db.SeriesEntity)?.name
                     ?: (heroItem as? com.ultratv.tv.nativeapp.data.db.MovieEntity)?.name
                     ?: S.homeWelcome,
-                subtitle = "Une œuvre dense, lumineuse, qui prend le temps de regarder ses personnages comme on regarderait des paysages.",
+                subtitle = S.homeHeroSubtitle,
                 image = (heroItem as? com.ultratv.tv.nativeapp.data.db.SeriesEntity)?.poster
                     ?: (heroItem as? com.ultratv.tv.nativeapp.data.db.MovieEntity)?.poster,
                 rating = 96,
-                meta = listOf("2025", "UHD · Dolby Vision", "Multi-pistes"),
+                meta = listOf("2025", "UHD · Dolby Vision", S.homeHeroMultiAudio),
                 synopsis = null,
                 cast = null,
-                primaryLabel = S.live + " · Reprendre",
+                primaryLabel = S.live + " · " + S.homeResumeLabel,
                 onPrimary = {
                     when (heroItem) {
                         is com.ultratv.tv.nativeapp.data.db.SeriesEntity -> onOpenSeries(heroItem.id)
                         is com.ultratv.tv.nativeapp.data.db.MovieEntity -> onOpenMovie(heroItem.id)
                     }
                 },
-                secondaryLabel = "Plus d'infos",
+                secondaryLabel = S.homeMoreInfo,
                 onSecondary = {
                     when (heroItem) {
                         is com.ultratv.tv.nativeapp.data.db.SeriesEntity -> onOpenSeries(heroItem.id)
@@ -108,7 +108,7 @@ fun HomeScreen(
                                 channelShort = null,
                                 hueSeed = c.name.hashCode(),
                                 hd = null,
-                                nowTitle = "En cours",
+                                nowTitle = S.homeNowPlaying,
                                 endsInMinutes = 30,
                             )
                         },
@@ -123,7 +123,7 @@ fun HomeScreen(
                     .padding(start = UltraTokens.EdgeGutter, top = 60.dp, end = UltraTokens.EdgeGutter),
             ) {
                 Text(
-                    "Bienvenue.",
+                    S.homeWelcomeShort,
                     fontFamily = UltraFonts.Serif,
                     fontSize = 84.sp,
                     lineHeight = 84.sp,
@@ -174,7 +174,7 @@ fun HomeScreen(
         if (continueW.isNotEmpty()) {
             ContentRail(
                 title = S.homeContinueWatching,
-                eyebrow = "Pour vous",
+                eyebrow = S.homeForYou,
                 cardWidth = 300.dp,
                 items = continueW,
                 itemKey = { "h-${it.kind}-${it.remoteId}" },
@@ -219,7 +219,7 @@ fun HomeScreen(
         if (movies.isNotEmpty()) {
             ContentRail(
                 title = S.homeFeaturedMovies,
-                eyebrow = "Cinéma",
+                eyebrow = S.homeCinemaEyebrow,
                 items = movies,
                 itemKey = { it.id },
             ) { m ->
@@ -234,7 +234,7 @@ fun HomeScreen(
         if (series.isNotEmpty()) {
             ContentRail(
                 title = S.seriesTitle,
-                eyebrow = "Séries",
+                eyebrow = S.homeSeriesEyebrow,
                 items = series,
                 itemKey = { it.id },
             ) { s ->
@@ -249,7 +249,7 @@ fun HomeScreen(
         if (channels.isNotEmpty()) {
             ContentRail(
                 title = S.homeFeaturedChannels,
-                eyebrow = "En direct",
+                eyebrow = S.homeLiveEyebrow,
                 items = channels,
                 itemKey = { it.id },
                 cardWidth = 260.dp,
@@ -257,7 +257,7 @@ fun HomeScreen(
                 PosterCard(
                     title = c.name,
                     poster = c.logo,
-                    subtitle = "Live",
+                    subtitle = S.homeLiveEyebrow,
                     aspect = 16f / 9f,
                 ) { onPlay(c.streamUrl, c.name) }
             }
@@ -379,8 +379,8 @@ private fun MacOnboardingCard(mac: String, onGoSettings: () -> Unit) {
     }
 }
 
-private fun progressLabel(positionMs: Long, durationMs: Long): String {
-    if (durationMs <= 0) return "Reprise"
+private fun progressLabel(positionMs: Long, durationMs: Long, resumeLabel: String): String {
+    if (durationMs <= 0) return resumeLabel
     val pct = (positionMs * 100 / durationMs).coerceIn(0, 99)
-    return "Reprise · $pct%"
+    return "$resumeLabel · $pct%"
 }
