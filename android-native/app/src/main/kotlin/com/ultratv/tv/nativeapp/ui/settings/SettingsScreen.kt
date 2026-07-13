@@ -27,6 +27,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -465,12 +466,14 @@ fun SettingsScreen(
 @Composable
 private fun ConfigPasswordDialog(initial: String, onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     var pwd by remember { mutableStateOf(initial) }
+    val passwordFocusRequester = remember { FocusRequester() }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
     AddProviderDialog(
         title = S.settingsConfigPwdDialogTitle,
         onDismiss = onDismiss,
         onSubmit = { onSubmit(pwd) },
         canSubmit = true,
+        initialFocusRequester = passwordFocusRequester,
     ) {
         Text(
             S.settingsConfigPwdDialogHint,
@@ -484,6 +487,7 @@ private fun ConfigPasswordDialog(initial: String, onDismiss: () -> Unit, onSubmi
             placeholder = S.settingsConfigPwdFieldPlaceholder,
             password = true,
             autoFocus = true,
+            focusRequester = passwordFocusRequester,
         )
     }
 }
@@ -492,12 +496,14 @@ private fun ConfigPasswordDialog(initial: String, onDismiss: () -> Unit, onSubmi
 @Composable
 private fun WorkerUrlDialog(initial: String, onDismiss: () -> Unit, onSubmit: (String) -> Unit) {
     var url by remember { mutableStateOf(initial) }
+    val workerUrlFocusRequester = remember { FocusRequester() }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
     AddProviderDialog(
         title = S.settingsWorkerDialogTitle,
         onDismiss = onDismiss,
         onSubmit = { onSubmit(url) },
         canSubmit = url.isNotBlank(),
+        initialFocusRequester = workerUrlFocusRequester,
     ) {
         Text(
             S.settingsWorkerDialogHint,
@@ -509,6 +515,8 @@ private fun WorkerUrlDialog(initial: String, onDismiss: () -> Unit, onSubmit: (S
             value = url,
             onChange = { url = it },
             placeholder = "https://your-config.your-acct.workers.dev",
+            autoFocus = true,
+            focusRequester = workerUrlFocusRequester,
         )
     }
 }
