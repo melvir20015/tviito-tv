@@ -1,7 +1,10 @@
 package com.ultratv.tv.nativeapp.ui.live
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -36,6 +39,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -43,6 +47,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -50,6 +55,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -59,6 +65,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
@@ -162,11 +171,14 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val showNumbers by vm.showChannelNumbers.collectAsState()
     val favorites by vm.favoriteRemoteIds.collectAsState()
     val s = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
-    var overlay by remember { mutableStateOf(LiveOverlay.Channels) }
+    var overlay by remember { mutableStateOf<LiveOverlay?>(null) }
     var focusedChannelId by remember { mutableStateOf<Long?>(null) }
     var activeChannel by remember { mutableStateOf<ChannelEntity?>(null) }
     var contextChannel by remember { mutableStateOf<ChannelEntity?>(null) }
     var contextProgram by remember { mutableStateOf<EpgEntity?>(null) }
+    var showInfoBar by remember { mutableStateOf(true) }
+    val livePrefs by vm.livePreferences.collectAsState()
+    val resolving by vm.resolving.collectAsState()
     val categoryRequester = remember { FocusRequester() }
     val channelRequester = remember { FocusRequester() }
     val guideRequester = remember { FocusRequester() }
@@ -189,29 +201,52 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         if (lockedKey(ch) in locked) { contextChannel = ch; return }
         activeChannel = ch
         focusedChannelId = ch.id
+        showInfoBar = true
         vm.resolveAndPlay(ch) { _, _ -> }
     }
 
-    BackHandler(enabled = contextChannel != null || contextProgram != null || overlay == LiveOverlay.Guide) {
+    BackHandler(enabled = contextChannel != null || contextProgram != null || overlay != null || showInfoBar) {
         when {
             contextProgram != null -> contextProgram = null
             contextChannel != null -> contextChannel = null
             overlay == LiveOverlay.Guide -> overlay = LiveOverlay.Channels
+            overlay == LiveOverlay.Channels -> overlay = null
+            showInfoBar -> showInfoBar = false
         }
     }
 
-    LaunchedEffect(selected, channels) {
-        focusedChannelId = focusedChannelId?.takeIf { id -> channels.any { it.id == id } } ?: channels.firstOrNull()?.id
+    LaunchedEffect(selected, channels, livePrefs.liveLastChannelRemoteId) {
         if (channels.isNotEmpty()) {
+            val restoredId = livePrefs.liveLastChannelRemoteId
+            val restoredChannel = channels.firstOrNull { it.remoteId == restoredId }
+            focusedChannelId = focusedChannelId?.takeIf { id -> channels.any { it.id == id } } ?: restoredChannel?.id ?: channels.firstOrNull()?.id
             val index = channels.indexOfFirst { it.id == focusedChannelId }.coerceAtLeast(0)
             channelListState.scrollToItem(index)
             guideListState.scrollToItem(index)
-            if (activeChannel == null) activeChannel = channels.getOrNull(index)
+            if (activeChannel == null) activeChannel = restoredChannel ?: channels.getOrNull(index)
         }
     }
     LaunchedEffect(overlay) {
-        delay(LiveTvMotion.focusRestoreDelayMillis)
-        runCatching { if (overlay == LiveOverlay.Guide) guideRequester.requestFocus() else channelRequester.requestFocus() }
+        if (overlay != null) {
+            delay(LiveTvMotion.focusRestoreDelayMillis)
+            runCatching { if (overlay == LiveOverlay.Guide) guideRequester.requestFocus() else channelRequester.requestFocus() }
+        }
+    }
+    LaunchedEffect(showInfoBar, activeChannel?.id) {
+        if (showInfoBar && overlay == null && contextChannel == null && contextProgram == null) {
+            delay(livePrefs.liveControlsTimeoutMs.coerceIn(4_000L, 6_000L))
+            showInfoBar = false
+        }
+    }
+
+    val view = LocalView.current
+    SideEffect {
+        val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        WindowInsetsControllerCompat(window, view).apply {
+            hide(WindowInsetsCompat.Type.systemBars())
+            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
     }
 
     BoxWithConstraints(
@@ -221,9 +256,11 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {
-                    Key.DirectionLeft -> { categoryRequester.requestFocus(); true }
-                    Key.DirectionRight -> { if (overlay == LiveOverlay.Channels) { overlay = LiveOverlay.Guide; true } else false }
-                    Key.DirectionCenter, Key.Enter -> { focusedChannel?.let(::playInPlace); true }
+                    Key.DirectionLeft -> { overlay = LiveOverlay.Channels; showInfoBar = false; true }
+                    Key.DirectionRight -> { overlay = LiveOverlay.Guide; showInfoBar = false; true }
+                    Key.DirectionUp -> { channels.previousFrom(activeChannel)?.let(::playInPlace); true }
+                    Key.DirectionDown -> { channels.nextFrom(activeChannel)?.let(::playInPlace); true }
+                    Key.DirectionCenter, Key.Enter -> { if (overlay == null) { showInfoBar = !showInfoBar; true } else { focusedChannel?.let(::playInPlace); true } }
                     Key.Menu -> { focusedChannel?.let { contextChannel = it }; true }
                     else -> false
                 }
@@ -231,7 +268,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     ) {
         val formFactor = liveTvFormFactor(maxWidth)
         LiveBackgroundPlayer(channel = videoChannel, locked = lockedKey(videoChannel) in locked, vm = vm)
-        Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
+        if (overlay != null) Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
         Crossfade(targetState = overlay, animationSpec = tween(LiveTvMotion.panelCrossfadeMillis), label = "live-overlay") { current ->
             if (current == LiveOverlay.Channels) {
                 Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -260,7 +297,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                     }
                     LiveNowPanel(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, Modifier.weight(1f).fillMaxHeight(), onGuide = { overlay = LiveOverlay.Guide })
                 }
-            } else {
+            } else if (current == LiveOverlay.Guide) {
                 EpgOverlayGuide(
                     channels = channels,
                     activeId = activeChannel?.id,
@@ -277,6 +314,21 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                     modifier = Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical),
                 )
             }
+        }
+        AnimatedVisibility(
+            visible = showInfoBar && overlay == null,
+            enter = slideInVertically(initialOffsetY = { it }),
+            exit = slideOutVertically(targetOffsetY = { it }),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            LiveChannelInfoBar(
+                channel = videoChannel,
+                epg = nowNext[videoChannel?.id],
+                locked = lockedKey(videoChannel) in locked,
+                favorite = videoChannel?.remoteId in favorites,
+                resolving = resolving,
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.32f),
+            )
         }
     }
     contextChannel?.let { ch ->
@@ -414,6 +466,67 @@ private fun LiveBackgroundPlayer(channel: ChannelEntity?, locked: Boolean, vm: L
     val scope = rememberCoroutineScope()
     LaunchedEffect(channel?.id, locked) { coordinator.request(scope, channel, locked, controller) }
     AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
+}
+
+
+@Composable
+private fun LiveChannelInfoBar(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, favorite: Boolean, resolving: Boolean, modifier: Modifier = Modifier) {
+    val now = epg?.first
+    val next = epg?.second
+    Column(
+        modifier
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.18f to LiveTvColors.surface.copy(alpha = 0.86f),
+                    1f to LiveTvColors.surface.copy(alpha = 0.94f),
+                ),
+            )
+            .padding(horizontal = 40.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            if (channel != null) ChannelLogo(channel.name, channel.logo, null, channel.name.hashCode(), null, 72.dp, false)
+            Spacer(Modifier.width(18.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    listOfNotNull(channel?.providerPosition?.takeIf { it > 0 }?.let { "%03d".format(it) }, channel?.name).joinToString("  ·  ").ifBlank { "Selecciona un canal" },
+                    color = LiveTvColors.textPrimary,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(now?.title ?: if (locked) "Canal bloqueado" else "Sin programa actual", color = LiveTvColors.textPrimary, fontSize = 26.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+                Spacer(Modifier.height(6.dp))
+                Text(now?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: "Horario no disponible", color = LiveTvColors.textSecondary, fontSize = 16.sp)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(fmt(System.currentTimeMillis()), color = LiveTvColors.textPrimary, fontFamily = UltraFonts.Mono, fontSize = 22.sp)
+                Spacer(Modifier.height(8.dp))
+                Text(listOfNotNull(if (favorite) "★ Favorito" else null, if (resolving) "Cargando…" else null, if (locked) "Bloqueo parental" else null, "HD").joinToString("  ·  "), color = LiveTvColors.textMuted, fontSize = 13.sp)
+            }
+        }
+        Spacer(Modifier.height(16.dp))
+        EpgProgressBar(now)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(next?.let { "Siguiente: ${it.title}" } ?: "Siguiente programa no disponible", color = LiveTvColors.textSecondary, fontSize = 16.sp, maxLines = 1, modifier = Modifier.weight(1f))
+            Text(next?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: "", color = LiveTvColors.textMuted, fontFamily = UltraFonts.Mono, fontSize = 14.sp)
+        }
+    }
+}
+
+private fun List<ChannelEntity>.nextFrom(current: ChannelEntity?): ChannelEntity? {
+    if (isEmpty()) return null
+    val index = indexOfFirst { it.id == current?.id }.takeIf { it >= 0 } ?: 0
+    return this[(index + 1) % size]
+}
+
+private fun List<ChannelEntity>.previousFrom(current: ChannelEntity?): ChannelEntity? {
+    if (isEmpty()) return null
+    val index = indexOfFirst { it.id == current?.id }.takeIf { it >= 0 } ?: 0
+    return this[(index - 1 + size) % size]
 }
 
 @Composable
