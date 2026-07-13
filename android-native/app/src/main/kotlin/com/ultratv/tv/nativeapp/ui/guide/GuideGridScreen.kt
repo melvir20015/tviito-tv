@@ -1,5 +1,7 @@
 package com.ultratv.tv.nativeapp.ui.guide
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
