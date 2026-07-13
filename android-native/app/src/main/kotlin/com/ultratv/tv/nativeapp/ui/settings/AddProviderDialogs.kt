@@ -25,7 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusGroup
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
@@ -59,6 +61,7 @@ fun AddProviderDialog(
     content: @Composable () -> Unit,
 ) {
     BackHandler(onBack = onDismiss)
+    val dialogFocusRequester = remember { FocusRequester() }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -68,10 +71,14 @@ fun AddProviderDialog(
             usePlatformDefaultWidth = false,
         ),
     ) {
-        LaunchedEffect(initialFocusRequester) {
+        LaunchedEffect(initialFocusRequester, dialogFocusRequester) {
+            // Wait until the dialog content has been placed in the modal
+            // window before moving focus away from SettingsScreen. The
+            // focusable group fallback keeps D-pad events in the modal even if
+            // a specific TextField is not ready on the first frame.
+            androidx.compose.runtime.withFrameNanos { }
+            runCatching { dialogFocusRequester.requestFocus() }
             initialFocusRequester?.let { requester ->
-                // Wait until the dialog content has been placed in the modal
-                // window before moving focus away from SettingsScreen.
                 androidx.compose.runtime.withFrameNanos { }
                 runCatching { requester.requestFocus() }
             }
@@ -86,6 +93,9 @@ fun AddProviderDialog(
             Column(
                 modifier = Modifier
                     .widthIn(min = 480.dp, max = 720.dp)
+                    .focusRequester(dialogFocusRequester)
+                    .focusGroup()
+                    .focusable()
                     .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.surface)
                     .padding(24.dp),

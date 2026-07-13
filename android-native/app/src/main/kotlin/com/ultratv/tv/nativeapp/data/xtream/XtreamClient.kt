@@ -21,6 +21,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -44,6 +45,8 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
         class Network(message: String) : XtreamException(message)
         class Http(code: Int) : XtreamException("Error HTTP $code al contactar el servidor Xtream.")
         class InvalidJson : XtreamException("El servidor Xtream devolvió una respuesta JSON inválida.")
+        class EmptyResponse : XtreamException("El servidor devolvió una respuesta vacía.")
+        class HtmlResponse : XtreamException("El servidor devolvió HTML en lugar de JSON; revisa la URL base o si el proveedor bloquea este cliente.")
         class UnsupportedResponse(message: String) : XtreamException(message)
         class InvalidCredentials : XtreamException("Credenciales Xtream inválidas o cuenta no autorizada.")
         class ExpiredAccount : XtreamException("La cuenta Xtream está expirada.")
@@ -164,7 +167,7 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
 
     /** Pull all episodes for one series. Returns pairs (season, episode_entity_without_id). */
     suspend fun fetchSeriesEpisodes(p: ProviderEntity, seriesRemoteId: String, seriesLocalId: Long): List<EpisodeEntity> {
-        val body = get("${p.baseUrl}/player_api.php?username=${p.username.urlEnc()}&password=${p.password.urlEnc()}&action=get_series_info&series_id=$seriesRemoteId")
+        val body = get(buildApiUrl(p, "get_series_info") + "&series_id=$seriesRemoteId").body
         val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return emptyList()
         val episodes = root["episodes"] as? JsonObject ?: return emptyList()
         val out = mutableListOf<EpisodeEntity>()
@@ -197,7 +200,7 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
 
     /** Short EPG (next ~5 programmes) for a single channel. */
     suspend fun fetchShortEpg(p: ProviderEntity, channelRemoteId: String, channelLocalId: Long): List<EpgEntity> {
-        val body = get("${p.baseUrl}/player_api.php?username=${p.username.urlEnc()}&password=${p.password.urlEnc()}&action=get_short_epg&stream_id=$channelRemoteId")
+        val body = get(buildApiUrl(p, "get_short_epg") + "&stream_id=$channelRemoteId").body
         val root = runCatching { json.parseToJsonElement(body) as? JsonObject }.getOrNull() ?: return emptyList()
         val listings = root["epg_listings"] as? JsonArray ?: return emptyList()
         return listings.mapNotNull { el ->
@@ -222,26 +225,17 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
     }
 
     private suspend fun fetchJson(p: ProviderEntity, action: String?): JsonElement {
-        val url = buildApiUrl(p, action)
-        val body = get(url)
+        val response = get(buildApiUrl(p, action))
+        XtreamUrlTools.classifyNonJsonResponse(response.body, response.contentType)?.let { throw it }
         return try {
-            json.parseToJsonElement(body)
+            json.parseToJsonElement(response.body)
         } catch (_: Throwable) {
             throw XtreamException.InvalidJson()
         }
     }
 
-    private fun buildApiUrl(p: ProviderEntity, action: String?): String = buildString {
-        append(p.baseUrl)
-        append("/player_api.php?username=")
-        append(p.username.urlEnc())
-        append("&password=")
-        append(p.password.urlEnc())
-        if (action != null) {
-            append("&action=")
-            append(action)
-        }
-    }
+    fun buildApiUrl(p: ProviderEntity, action: String?): String =
+        XtreamUrlTools.buildApiUrl(p.baseUrl, p.username, p.password, action)
 
     private fun describeObjectError(obj: JsonObject?): XtreamException? {
         if (obj == null) return null
@@ -275,17 +269,34 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
     private fun JsonElement.str(): String? = (this as? JsonPrimitive)?.contentOrNull
     private fun JsonElement.jsonPrimitiveOrNull(): JsonPrimitive? = this as? JsonPrimitive
 
-    private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
+    private data class XtreamHttpResponse(val body: String, val contentType: String?)
+
+    private suspend fun get(url: String): XtreamHttpResponse = withContext(Dispatchers.IO) {
         try {
-            ok.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+            ok.newCall(
+                Request.Builder()
+                    .url(url)
+                    .header("User-Agent", "TviitoTV/1.0 AndroidTV")
+                    .header("Accept", "application/json, text/plain, */*")
+                    .build()
+            ).execute().use { resp ->
                 if (!resp.isSuccessful) throw XtreamException.Http(resp.code)
-                resp.body?.string().orEmpty()
+                resp.toXtreamHttpResponse()
             }
         } catch (t: XtreamException) {
             throw t
         } catch (_: Throwable) {
             throw XtreamException.Network("No se pudo conectar con el servidor Xtream.")
         }
+    }
+
+    private fun Response.toXtreamHttpResponse(): XtreamHttpResponse {
+        val responseBody = body
+        val responseContentType = header("Content-Type") ?: responseBody?.contentType()?.toString()
+        return XtreamHttpResponse(
+            body = responseBody?.string().orEmpty(),
+            contentType = responseContentType,
+        )
     }
 
     private fun String.urlEnc(): String = java.net.URLEncoder.encode(this, "UTF-8")

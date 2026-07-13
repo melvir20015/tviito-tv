@@ -104,4 +104,87 @@ class XtreamClientTest {
             client.fetchLiveStreams(provider)
         }
     }
+
+    @Test
+    fun normalizeInput_conVariantesComunes_extraeBaseSinCredenciales() {
+        val cases = mapOf(
+            "http://host.example:8080" to "http://host.example:8080",
+            "http://host.example:8080/" to "http://host.example:8080",
+            "http://host.example:8080/player_api.php" to "http://host.example:8080",
+            "http://host.example:8080/get.php?username=secreto&password=privado&type=m3u_plus" to "http://host.example:8080",
+            "http://host.example:8080/player_api.php?username=secreto&password=privado" to "http://host.example:8080",
+        )
+
+        cases.forEach { (input, expected) ->
+            assertEquals(expected, XtreamUrlTools.normalizeInput(input).baseUrl)
+        }
+    }
+
+    @Test
+    fun normalizeInput_conGetPhp_extraeCredencialesParaAutocompletarCamposVacios() {
+        val result = XtreamUrlTools.normalizeInput(
+            "http://host.example:8080/get.php?username=usuario&password=clave&type=m3u_plus"
+        )
+
+        assertEquals("http://host.example:8080", result.baseUrl)
+        assertEquals("usuario", result.username)
+        assertEquals("clave", result.password)
+    }
+
+    @Test
+    fun buildApiUrl_noDuplicaPlayerApiNiQueryString() {
+        val url = XtreamUrlTools.buildApiUrl(
+            "http://host.example:8080/get.php?username=viejo&password=vieja&type=m3u_plus",
+            "usuario nuevo",
+            "clave nueva",
+            "get_live_streams",
+        )
+
+        assertEquals(
+            "http://host.example:8080/player_api.php?username=usuario%20nuevo&password=clave%20nueva&action=get_live_streams",
+            url,
+        )
+        assertFalse(url.contains("get.php/player_api.php"))
+        assertFalse(url.contains("player_api.php/player_api.php"))
+    }
+
+    @Test
+    fun fetchLiveStreams_conHtml_lanzaErrorHtmlSeguro() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/html; charset=utf-8")
+                .setBody("<html><body>usuario-secreto clave-secreta blocked</body></html>")
+        )
+
+        val error = assertFailsWith<XtreamClient.XtreamException.HtmlResponse> {
+            client.fetchLiveStreams(provider)
+        }
+
+        assertFalse(error.message.orEmpty().contains(provider.username))
+        assertFalse(error.message.orEmpty().contains(provider.password))
+    }
+
+    @Test
+    fun fetchLiveStreams_conCuerpoVacio_lanzaErrorVacioSeguro() = runBlocking {
+        server.enqueue(MockResponse().setBody(""))
+
+        val error = assertFailsWith<XtreamClient.XtreamException.EmptyResponse> {
+            client.fetchLiveStreams(provider)
+        }
+
+        assertFalse(error.message.orEmpty().contains(provider.username))
+        assertFalse(error.message.orEmpty().contains(provider.password))
+    }
+
+    @Test
+    fun fetchLiveStreams_enviaCabecerasGenericasPropias() = runBlocking {
+        server.enqueue(MockResponse().setBody("[]"))
+
+        client.fetchLiveStreams(provider)
+
+        val request = server.takeRequest()
+        assertEquals("TviitoTV/1.0 AndroidTV", request.getHeader("User-Agent"))
+        assertEquals("application/json, text/plain, */*", request.getHeader("Accept"))
+    }
+
 }

@@ -165,6 +165,10 @@ class SettingsViewModel @Inject constructor(
             "La cuenta Xtream está expirada. Contacta con tu proveedor."
         is XtreamClient.XtreamException.UnsupportedResponse ->
             "Servidor Xtream no compatible: ${t.message}"
+        is XtreamClient.XtreamException.EmptyResponse ->
+            "El servidor Xtream devolvió una respuesta vacía. Revisa la URL base y la compatibilidad con player_api.php."
+        is XtreamClient.XtreamException.HtmlResponse ->
+            "El servidor devolvió HTML en lugar de JSON; revisa la URL base o si el proveedor bloquea este cliente."
         is XtreamClient.XtreamException.Http ->
             "Error de red/HTTP: ${t.message}"
         is XtreamClient.XtreamException.Network ->

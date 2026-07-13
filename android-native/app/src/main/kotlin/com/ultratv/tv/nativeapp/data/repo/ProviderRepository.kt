@@ -13,6 +13,7 @@ import com.ultratv.tv.nativeapp.data.parental.ParentalStore
 import com.ultratv.tv.nativeapp.data.stalker.StalkerClient
 import com.ultratv.tv.nativeapp.data.xmltv.XmltvParser
 import com.ultratv.tv.nativeapp.data.xtream.XtreamClient
+import com.ultratv.tv.nativeapp.data.xtream.XtreamUrlTools
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
@@ -250,18 +251,21 @@ class ProviderRepository @Inject constructor(
     }
 
     suspend fun addXtream(name: String, baseUrl: String, username: String, password: String): Long {
-        val normalised = baseUrl.trimEnd('/')
+        val normalizedInput = XtreamUrlTools.normalizeInput(baseUrl)
+        val normalised = normalizedInput.baseUrl
+        val finalUsername = username.ifBlank { normalizedInput.username.orEmpty() }
+        val finalPassword = password.ifBlank { normalizedInput.password.orEmpty() }
         // Idempotent: if the (kind, baseUrl, username) tuple already exists,
         // reuse its id rather than creating a duplicate row. Callers that
         // sync after add() will simply re-pull catalogs into the same record.
-        providerDao.findByIdentity("XTREAM", normalised, username)?.let { return it.id }
+        providerDao.findByIdentity("XTREAM", normalised, finalUsername)?.let { return it.id }
         return providerDao.upsert(
             ProviderEntity(
                 name = name.ifBlank { runCatching { java.net.URI(normalised).host }.getOrNull() ?: "Xtream" },
                 kind = "XTREAM",
                 baseUrl = normalised,
-                username = username,
-                password = password,
+                username = finalUsername,
+                password = finalPassword,
                 active = false,    // explicit default is set in Settings; see setDefault
             ),
         )
