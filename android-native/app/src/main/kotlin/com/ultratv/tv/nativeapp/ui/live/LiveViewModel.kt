@@ -148,6 +148,12 @@ class LiveViewModel @Inject constructor(
     private val _nowNext = MutableStateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>>(emptyMap())
     val nowNext: StateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>> = _nowNext.asStateFlow()
 
+    val favoriteRemoteIds: StateFlow<Set<String>> = combine(providers, _selectedCategory) { ps, _ ->
+        ps.firstOrNull { it.active }?.id ?: ps.firstOrNull()?.id
+    }.flatMapLatest { pid ->
+        if (pid == null) flowOf(emptySet()) else catalog.favoritesByKind(pid, "LIVE").map { rows -> rows.map { it.remoteId }.toSet() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
     private val epgDao = epgDaoArg
 
     /** Adds a reminder for a future programme on the given channel. */
@@ -196,6 +202,12 @@ class LiveViewModel @Inject constructor(
             val key = lockedStore.keyFor(channel.providerId, channel.remoteId)
             val on = key in lockedChannels.value
             lockedStore.set(channel.providerId, channel.remoteId, !on)
+        }
+    }
+
+    fun toggleFavorite(channel: ChannelEntity) {
+        viewModelScope.launch {
+            catalog.setFavorite(channel.providerId, "LIVE", channel.remoteId, channel.remoteId !in favoriteRemoteIds.value)
         }
     }
 

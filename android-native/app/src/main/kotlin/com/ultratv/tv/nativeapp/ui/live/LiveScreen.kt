@@ -149,6 +149,8 @@ private fun liveTvFormFactor(maxWidth: Dp): LiveTvFormFactor = when {
 @Composable
 fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) = LiveTvScreen(onPlay = onPlay, vm = vm)
 
+private enum class LiveOverlay { Channels, Guide }
+
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) {
@@ -158,151 +160,138 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
     val showNumbers by vm.showChannelNumbers.collectAsState()
+    val favorites by vm.favoriteRemoteIds.collectAsState()
     val s = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
-    val nav = remember { LiveNavigationCoordinator() }
-    var level by remember { mutableStateOf(nav.level) }
+    var overlay by remember { mutableStateOf(LiveOverlay.Channels) }
     var focusedChannelId by remember { mutableStateOf<Long?>(null) }
-    var previewChannelId by remember { mutableStateOf<Long?>(null) }
+    var activeChannel by remember { mutableStateOf<ChannelEntity?>(null) }
     var contextChannel by remember { mutableStateOf<ChannelEntity?>(null) }
-    val catRequester = remember { FocusRequester() }
-    val chanRequester = remember { FocusRequester() }
-    val previewRequester = remember { FocusRequester() }
+    var contextProgram by remember { mutableStateOf<EpgEntity?>(null) }
+    val categoryRequester = remember { FocusRequester() }
+    val channelRequester = remember { FocusRequester() }
+    val guideRequester = remember { FocusRequester() }
     val categoryListState = rememberLazyListState()
     val channelListState = rememberLazyListState()
-    val rememberedScroll = remember { mutableStateMapOf<String, Int>() }
+    val guideListState = rememberLazyListState()
     val categories = remember(realCats, selected, channels.size) {
         buildList {
             add(LiveCategoryUi(CATEGORY_ALL, s.liveAllChannels, if (selected == CATEGORY_ALL) channels.size else null))
             add(LiveCategoryUi(CATEGORY_FAVORITES, "Favoritos", if (selected == CATEGORY_FAVORITES) channels.size else null))
+            add(LiveCategoryUi(CATEGORY_RECENTS, "Recientes"))
             realCats.forEach { add(LiveCategoryUi(it.remoteId, prettyCategoryName(it.name))) }
         }
     }
     val categoryTitle = categories.firstOrNull { it.id == selected }?.title ?: "Canales"
-    val previewChannel = channels.firstOrNull { it.id == previewChannelId }
-    fun requestFocusFor(newLevel: LiveLevel) {
-        runCatching {
-            when (newLevel) {
-                LiveLevel.Categories -> catRequester
-                LiveLevel.Channels -> chanRequester
-                LiveLevel.Preview, LiveLevel.Fullscreen -> previewRequester
-            }.requestFocus()
-        }
+    val focusedChannel = channels.firstOrNull { it.id == focusedChannelId }
+    val videoChannel = activeChannel ?: focusedChannel ?: channels.firstOrNull()
+
+    fun playInPlace(ch: ChannelEntity) {
+        if (lockedKey(ch) in locked) { contextChannel = ch; return }
+        activeChannel = ch
+        focusedChannelId = ch.id
+        vm.resolveAndPlay(ch) { _, _ -> }
     }
 
-    fun enterChannels(categoryId: String) {
-        rememberedScroll[selected] = channelListState.firstVisibleItemIndex
-        focusedChannelId = nav.selectCategory(categoryId, channels.firstOrNull()?.id)
-        vm.selectCategory(categoryId)
-        level = nav.level
-    }
-
-    fun openFullscreen(channel: ChannelEntity) {
-        nav.restoreFromFullscreen()
-        level = nav.level
-        vm.resolveAndPlay(channel, onPlay)
-    }
-
-    BackHandler(enabled = contextChannel != null || level != LiveLevel.Categories) {
-        if (contextChannel != null) {
-            contextChannel = null
-        } else {
-            rememberedScroll[selected] = channelListState.firstVisibleItemIndex
-            nav.back()
-            level = nav.level
+    BackHandler(enabled = contextChannel != null || contextProgram != null || overlay == LiveOverlay.Guide) {
+        when {
+            contextProgram != null -> contextProgram = null
+            contextChannel != null -> contextChannel = null
+            overlay == LiveOverlay.Guide -> overlay = LiveOverlay.Channels
         }
     }
 
     LaunchedEffect(selected, channels) {
-        val restored = nav.restoreChannel(selected, channels.firstOrNull()?.id)
-        focusedChannelId = restored?.takeIf { id -> channels.any { it.id == id } } ?: channels.firstOrNull()?.id
-        val scrollTarget = rememberedScroll[selected]
-            ?: focusedChannelId?.let { id -> channels.indexOfFirst { it.id == id }.takeIf { it >= 0 } }
-            ?: 0
-        if (channels.isNotEmpty()) channelListState.scrollToItem(scrollTarget.coerceIn(0, channels.lastIndex))
+        focusedChannelId = focusedChannelId?.takeIf { id -> channels.any { it.id == id } } ?: channels.firstOrNull()?.id
+        if (channels.isNotEmpty()) {
+            val index = channels.indexOfFirst { it.id == focusedChannelId }.coerceAtLeast(0)
+            channelListState.scrollToItem(index)
+            guideListState.scrollToItem(index)
+            if (activeChannel == null) activeChannel = channels.getOrNull(index)
+        }
     }
-
-    LaunchedEffect(level) {
+    LaunchedEffect(overlay) {
         delay(LiveTvMotion.focusRestoreDelayMillis)
-        requestFocusFor(level)
+        runCatching { if (overlay == LiveOverlay.Guide) guideRequester.requestFocus() else channelRequester.requestFocus() }
     }
 
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .background(LiveTvColors.background)
-            .padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical)
+            .background(Color.Black)
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {
-                    Key.DirectionLeft, Key.Back -> {
-                        if (level != LiveLevel.Categories) {
-                            rememberedScroll[selected] = channelListState.firstVisibleItemIndex
-                            nav.back()
-                            level = nav.level
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Key.DirectionRight -> {
-                        if (level == LiveLevel.Channels && focusedChannelId != null) {
-                            previewChannelId = focusedChannelId
-                            nav.clickChannel(focusedChannelId!!)
-                            level = nav.level
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                    Key.DirectionUp, Key.DirectionDown -> false
-                    Key.Enter, Key.DirectionCenter -> false
+                    Key.DirectionLeft -> { categoryRequester.requestFocus(); true }
+                    Key.DirectionRight -> { if (overlay == LiveOverlay.Channels) { overlay = LiveOverlay.Guide; true } else false }
+                    Key.DirectionCenter, Key.Enter -> { focusedChannel?.let(::playInPlace); true }
+                    Key.Menu -> { focusedChannel?.let { contextChannel = it }; true }
                     else -> false
                 }
             },
     ) {
         val formFactor = liveTvFormFactor(maxWidth)
-        Crossfade(targetState = level, animationSpec = tween(durationMillis = LiveTvMotion.panelCrossfadeMillis), label = "live-level") { currentLevel ->
-            when (currentLevel) {
-                LiveLevel.Categories -> Box(Modifier.fillMaxSize()) {
-                    RootNavigationRail(formFactor = formFactor, modifier = Modifier.align(Alignment.CenterStart))
-                    PlaylistPanel(categories, selected, catRequester, categoryListState, Modifier.fillMaxSize(), ::enterChannels)
+        LiveBackgroundPlayer(channel = videoChannel, locked = lockedKey(videoChannel) in locked, vm = vm)
+        Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
+        Crossfade(targetState = overlay, animationSpec = tween(LiveTvMotion.panelCrossfadeMillis), label = "live-overlay") { current ->
+            if (current == LiveOverlay.Channels) {
+                Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Box(Modifier.width(330.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.94f), LiveTvShapes.panel).padding(18.dp)) {
+                        RootNavigationRail(formFactor, Modifier.align(Alignment.CenterStart))
+                        PlaylistPanel(categories, selected, categoryRequester, categoryListState, Modifier.padding(start = 16.dp).fillMaxSize()) { id -> vm.selectCategory(id) }
+                    }
+                    Box(Modifier.width(520.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.92f), LiveTvShapes.panel).padding(18.dp)) {
+                        ChannelListOverlay(
+                            channels = channels,
+                            focusedId = focusedChannelId,
+                            categoryTitle = categoryTitle,
+                            requester = channelRequester,
+                            state = channelListState,
+                            nowNext = nowNext,
+                            locked = locked,
+                            showNumbers = showNumbers,
+                            favorites = favorites,
+                            activeId = activeChannel?.id,
+                            modifier = Modifier.fillMaxSize(),
+                            onFocus = { ch -> focusedChannelId = ch.id },
+                            onBackToCategories = { categoryRequester.requestFocus() },
+                            onChannelClick = ::playInPlace,
+                            onOpenMenu = { contextChannel = it },
+                        )
+                    }
+                    LiveNowPanel(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, Modifier.weight(1f).fillMaxHeight(), onGuide = { overlay = LiveOverlay.Guide })
                 }
-                LiveLevel.Channels -> ChannelListOverlay(
+            } else {
+                EpgOverlayGuide(
                     channels = channels,
+                    activeId = activeChannel?.id,
                     focusedId = focusedChannelId,
-                    categoryTitle = categoryTitle,
-                    requester = chanRequester,
-                    state = channelListState,
                     nowNext = nowNext,
+                    favorites = favorites,
                     locked = locked,
-                    showNumbers = showNumbers,
-                    modifier = Modifier.fillMaxSize(),
-                    onFocus = { ch -> focusedChannelId = ch.id; nav.rememberChannel(selected, ch.id) },
-                    onBackToCategories = { nav.back(); level = nav.level },
-                    onChannelClick = { ch ->
-                        if (lockedKey(ch) in locked) contextChannel = ch else {
-                            when (nav.clickChannel(ch.id)) {
-                                LiveNavigationAction.OpenFullscreen -> openFullscreen(ch)
-                                else -> { previewChannelId = ch.id; level = nav.level }
-                            }
-                        }
-                    },
-                )
-                LiveLevel.Preview, LiveLevel.Fullscreen -> LivePreviewSurface(
-                    channel = previewChannel,
-                    epg = nowNext[previewChannel?.id],
-                    locked = lockedKey(previewChannel) in locked,
-                    focused = true,
-                    requester = previewRequester,
-                    vm = vm,
-                    modifier = Modifier.fillMaxSize(),
-                    onBack = { nav.back(); level = nav.level },
-                    onPlay = { previewChannel?.let(::openFullscreen) },
+                    requester = guideRequester,
+                    state = guideListState,
+                    onFocus = { focusedChannelId = it.id },
+                    onPlay = ::playInPlace,
+                    onProgramMenu = { contextProgram = it },
+                    onChannelMenu = { contextChannel = it },
+                    modifier = Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical),
                 )
             }
         }
     }
-    contextChannel?.let { ch -> ChannelContextMenu(ch, lockedKey(ch) in locked, onToggleLock = { vm.toggleLock(ch); contextChannel = null }, onDismiss = { contextChannel = null }) }
+    contextChannel?.let { ch ->
+        ChannelContextMenu(
+            channel = ch,
+            locked = lockedKey(ch) in locked,
+            favorite = ch.remoteId in favorites,
+            now = nowNext[ch.id]?.first,
+            onToggleFavorite = { vm.toggleFavorite(ch) },
+            onToggleLock = { vm.toggleLock(ch) },
+            onPlay = { playInPlace(ch); contextChannel = null },
+            onDismiss = { contextChannel = null },
+        )
+    }
+    contextProgram?.let { program -> ProgramContextMenu(program = program, onReminder = { videoChannel?.let { vm.addReminder(it, program) } }, onDismiss = { contextProgram = null }) }
 }
 
 private fun lockedKey(ch: ChannelEntity?) = ch?.let { "${it.providerId}:${it.remoteId}" } ?: ""
@@ -339,8 +328,8 @@ private fun RootNavigationRail(formFactor: LiveTvFormFactor, modifier: Modifier 
 }
 
 @Composable
-private fun ChannelListOverlay(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit) {
-    GroupPanel(channels, focusedId, categoryTitle, requester, state, nowNext, locked, showNumbers, modifier, onFocus, onBackToCategories, onChannelClick)
+private fun ChannelListOverlay(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, favorites: Set<String>, activeId: Long?, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit, onOpenMenu: (ChannelEntity) -> Unit) {
+    GroupPanel(channels, focusedId, categoryTitle, requester, state, nowNext, locked, showNumbers, favorites, activeId, modifier, onFocus, onBackToCategories, onChannelClick, onOpenMenu)
 }
 
 @Composable
@@ -357,15 +346,21 @@ private fun EpgGuide(now: EpgEntity?) {
 }
 
 @Composable
-private fun ProgramContextMenu(program: EpgEntity?, onDismiss: () -> Unit) {
+private fun ProgramContextMenu(program: EpgEntity?, onReminder: () -> Unit, onDismiss: () -> Unit) {
     BackHandler { onDismiss() }
     Box(Modifier.fillMaxSize().background(LiveTvColors.scrim), contentAlignment = Alignment.Center) {
-        Text(program?.title ?: "Programa sin información", color = LiveTvColors.textPrimary, modifier = Modifier.background(LiveTvColors.surface, LiveTvShapes.menu).padding(18.dp))
+        Column(Modifier.width(380.dp).background(LiveTvColors.surface, LiveTvShapes.menu).border(1.dp, LiveTvColors.outlineStrong, LiveTvShapes.menu).padding(18.dp)) {
+            Text(program?.title ?: "Programa sin información", color = LiveTvColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(8.dp))
+            Text(program?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: "Sin horario disponible", color = LiveTvColors.textMuted, fontSize = 13.sp)
+            Spacer(Modifier.height(14.dp))
+            Card(onClick = onReminder, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text("Crear recordatorio", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+        }
     }
 }
 
 @Composable
-private fun GroupPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit) {
+private fun GroupPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryTitle: String, requester: FocusRequester, state: LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, favorites: Set<String>, activeId: Long?, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onBackToCategories: () -> Unit, onChannelClick: (ChannelEntity) -> Unit, onOpenMenu: (ChannelEntity) -> Unit) {
     Column(modifier.focusRequester(requester)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
@@ -378,22 +373,22 @@ private fun GroupPanel(channels: List<ChannelEntity>, focusedId: Long?, category
         if (channels.isEmpty()) Box(Modifier.fillMaxSize().background(LiveTvColors.surface, RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Text("No hay canales disponibles.", color = LiveTvColors.textMuted) }
         else LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
             items(channels, key = { it.id }) { ch ->
-                ChannelRow(ch, channels.indexOf(ch) + 1, focusedId == ch.id, lockedKey(ch) in locked, showNumbers, nowNext[ch.id]?.first, nowNext[ch.id]?.second, onFocus, onChannelClick)
+                ChannelRow(ch, channels.indexOf(ch) + 1, focusedId == ch.id, activeId == ch.id, lockedKey(ch) in locked, ch.remoteId in favorites, showNumbers, nowNext[ch.id]?.first, nowNext[ch.id]?.second, onFocus, onChannelClick, onOpenMenu)
             }
         }
     }
 }
 
 @Composable
-private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, locked: Boolean, showNumber: Boolean, now: EpgEntity?, next: EpgEntity?, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit) {
+private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, active: Boolean, locked: Boolean, favorite: Boolean, showNumber: Boolean, now: EpgEntity?, next: EpgEntity?, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onOpenMenu: (ChannelEntity) -> Unit) {
     val scale = if (focused) 1.015f else 1f
-    Card(onClick = { onPlay(ch) }, shape = CardDefaults.shape(RoundedCornerShape(16.dp)), colors = CardDefaults.colors(containerColor = if (focused) LiveTvColors.surfaceRaised else LiveTvColors.surface), modifier = Modifier.fillMaxWidth().scale(scale).border(if (focused) 2.dp else 1.dp, if (focused) LiveTvColors.accent else LiveTvColors.outline, RoundedCornerShape(16.dp)).onFocusEventCompat { onFocus(ch) }) {
+    Card(onClick = { onPlay(ch) }, shape = CardDefaults.shape(RoundedCornerShape(16.dp)), colors = CardDefaults.colors(containerColor = if (focused) LiveTvColors.surfaceRaised else LiveTvColors.surface), modifier = Modifier.fillMaxWidth().scale(scale).border(if (focused || active) 2.dp else 1.dp, if (active) LiveTvColors.live else if (focused) LiveTvColors.accent else LiveTvColors.outline, RoundedCornerShape(16.dp)).onFocusEventCompat { onFocus(ch) }.onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onOpenMenu(ch); true } else false }) {
         Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (showNumber) Text("%03d".format(number), color = LiveTvColors.textSubtle, fontFamily = UltraFonts.Mono, fontSize = 12.sp, modifier = Modifier.width(48.dp))
             ChannelLogo(ch.name, ch.logo, null, ch.name.hashCode(), null, 46.dp, false)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Text(ch.name, color = LiveTvColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1); if (locked) Text("  Bloqueado", color = LiveTvColors.accent, fontSize = 10.sp) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Text(ch.name, color = LiveTvColors.textPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1); if (active) Text("  En vivo", color = LiveTvColors.live, fontSize = 10.sp); if (favorite) Text("  ★", color = LiveTvColors.accent, fontSize = 13.sp); if (locked) Text("  Bloqueado", color = LiveTvColors.accent, fontSize = 10.sp) }
                 ProgramInformation(now, next, compact = true)
             }
             StreamStatusIndicator(locked = locked, focused = focused)
@@ -402,6 +397,98 @@ private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, locked:
 }
 
 private fun Modifier.onFocusEventCompat(block: () -> Unit) = this.then(Modifier.onFocusChanged { if (it.isFocused) block() })
+
+
+@Composable
+private fun LiveBackgroundPlayer(channel: ChannelEntity?, locked: Boolean, vm: LiveViewModel) {
+    val context = LocalContext.current
+    val player = remember { ExoPlayer.Builder(context).build().apply { playWhenReady = true } }
+    val coordinator = vm.previewCoordinator
+    val controller = remember(player) {
+        object : PreviewPlayerController {
+            override fun stop() { player.stop(); player.clearMediaItems() }
+            override fun play(url: String) { player.setMediaItem(androidx.media3.common.MediaItem.fromUri(url)); player.prepare() }
+        }
+    }
+    DisposableEffect(player) { onDispose { coordinator.clear(controller); player.release() } }
+    val scope = rememberCoroutineScope()
+    LaunchedEffect(channel?.id, locked) { coordinator.request(scope, channel, locked, controller) }
+    AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
+}
+
+@Composable
+private fun LiveNowPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, modifier: Modifier = Modifier, onGuide: () -> Unit) {
+    Column(modifier.padding(8.dp), verticalArrangement = Arrangement.Bottom) {
+        Spacer(Modifier.weight(1f))
+        Column(Modifier.fillMaxWidth().background(LiveTvColors.surface.copy(alpha = 0.72f), LiveTvShapes.panel).padding(20.dp)) {
+            Text(if (locked) "Canal bloqueado" else "Reproduciendo ahora", color = LiveTvColors.textMuted, fontSize = 12.sp, letterSpacing = 2.sp)
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (channel != null) ChannelLogo(channel.name, channel.logo, null, channel.name.hashCode(), null, 54.dp, false)
+                Spacer(Modifier.width(14.dp))
+                Text(channel?.name ?: "Selecciona un canal", color = LiveTvColors.textPrimary, fontFamily = UltraFonts.Serif, fontSize = 30.sp, maxLines = 2)
+            }
+            Spacer(Modifier.height(12.dp))
+            ProgramInformation(epg?.first, epg?.second, compact = false)
+            Spacer(Modifier.height(12.dp))
+            EpgProgressBar(epg?.first)
+            Spacer(Modifier.height(16.dp))
+            Card(onClick = onGuide, colors = CardDefaults.colors(containerColor = LiveTvColors.accent)) { Text("Abrir guía EPG", color = Color.White, modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun EpgOverlayGuide(channels: List<ChannelEntity>, activeId: Long?, focusedId: Long?, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, favorites: Set<String>, locked: Set<String>, requester: FocusRequester, state: LazyListState, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onProgramMenu: (EpgEntity) -> Unit, onChannelMenu: (ChannelEntity) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier.background(LiveTvColors.surface.copy(alpha = 0.94f), LiveTvShapes.panel).padding(18.dp).focusRequester(requester)) {
+        Text("Guía EPG", color = LiveTvColors.textPrimary, fontFamily = UltraFonts.Serif, fontSize = 32.sp)
+        Text("Video persistente · OK reproduce · Menú abre acciones · Back vuelve a canales", color = LiveTvColors.textMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(14.dp))
+        EpgTimeHeader()
+        Spacer(Modifier.height(8.dp))
+        if (channels.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canales disponibles.", color = LiveTvColors.textMuted) } else LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(channels, key = { it.id }) { ch ->
+                val pair = nowNext[ch.id]
+                EpgGuideRow(ch, channels.indexOf(ch) + 1, activeId == ch.id, focusedId == ch.id, ch.remoteId in favorites, lockedKey(ch) in locked, pair?.first, pair?.second, onFocus, onPlay, onProgramMenu, onChannelMenu)
+            }
+        }
+    }
+}
+
+@Composable
+private fun EpgTimeHeader() {
+    Row(Modifier.fillMaxWidth().height(34.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Canal", color = LiveTvColors.textMuted, fontSize = 13.sp, modifier = Modifier.width(240.dp))
+        val now = System.currentTimeMillis()
+        repeat(4) { slot -> Text(fmt(now + slot * 30 * 60_000L), color = LiveTvColors.textMuted, fontFamily = UltraFonts.Mono, fontSize = 13.sp, modifier = Modifier.weight(1f)) }
+    }
+}
+
+@Composable
+private fun EpgGuideRow(ch: ChannelEntity, number: Int, active: Boolean, focused: Boolean, favorite: Boolean, locked: Boolean, now: EpgEntity?, next: EpgEntity?, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onProgramMenu: (EpgEntity) -> Unit, onChannelMenu: (ChannelEntity) -> Unit) {
+    Row(Modifier.fillMaxWidth().height(76.dp).background(if (focused) LiveTvColors.surfaceRaised else LiveTvColors.surface, RoundedCornerShape(14.dp)).border(if (active || focused) 2.dp else 1.dp, if (active) LiveTvColors.live else if (focused) LiveTvColors.accent else LiveTvColors.outline, RoundedCornerShape(14.dp)).onFocusEventCompat { onFocus(ch) }.onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onChannelMenu(ch); true } else false }, verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.width(240.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("%03d".format(number), color = LiveTvColors.textSubtle, fontFamily = UltraFonts.Mono, fontSize = 12.sp, modifier = Modifier.width(42.dp))
+            ChannelLogo(ch.name, ch.logo, null, ch.name.hashCode(), null, 38.dp, false)
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) { Text(ch.name, color = LiveTvColors.textPrimary, fontSize = 15.sp, maxLines = 1); Text(listOfNotNull(if (active) "En vivo" else null, if (favorite) "Favorito" else null, if (locked) "Bloqueado" else null).joinToString(" · ").ifBlank { "Canal" }, color = LiveTvColors.textMuted, fontSize = 10.sp, maxLines = 1) }
+        }
+        ProgramCell(now, true, Modifier.weight(1.25f), onClick = { onPlay(ch) }, onMenu = { now?.let(onProgramMenu) })
+        ProgramCell(next, false, Modifier.weight(1f), onClick = { next?.let(onProgramMenu) ?: onPlay(ch) }, onMenu = { next?.let(onProgramMenu) })
+        Box(Modifier.width(2.dp).fillMaxHeight().background(LiveTvColors.accent))
+        Text("Ahora", color = LiveTvColors.accent, fontSize = 10.sp, modifier = Modifier.width(52.dp).padding(start = 8.dp))
+    }
+}
+
+@Composable
+private fun ProgramCell(program: EpgEntity?, current: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit, onMenu: () -> Unit) {
+    Card(onClick = onClick, colors = CardDefaults.colors(containerColor = if (current) LiveTvColors.accentSoft else LiveTvColors.surfaceRaised), modifier = modifier.fillMaxHeight().padding(vertical = 7.dp, horizontal = 5.dp).onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onMenu(); true } else false }) {
+        Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.Center) {
+            Text(program?.title ?: "Sin información", color = LiveTvColors.textPrimary, fontSize = 13.sp, maxLines = 1)
+            Text(program?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: "EPG no disponible", color = LiveTvColors.textMuted, fontSize = 10.sp, maxLines = 1)
+        }
+    }
+}
 
 @Composable
 private fun LivePreviewSurface(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, focused: Boolean, requester: FocusRequester, vm: LiveViewModel, modifier: Modifier = Modifier, onBack: () -> Unit, onPlay: () -> Unit) {
@@ -493,5 +580,19 @@ private fun EpgProgressBar(now: EpgEntity?) { val progress = now?.let { ((System
 @Composable
 private fun StreamStatusIndicator(locked: Boolean, focused: Boolean) { Box(Modifier.size(10.dp).background(if (locked) LiveTvColors.accent else if (focused) LiveTvColors.live else LiveTvColors.textSubtle, CircleShape)) }
 @Composable
-private fun ChannelContextMenu(channel: ChannelEntity, locked: Boolean, onToggleLock: () -> Unit, onDismiss: () -> Unit) { BackHandler { onDismiss() }; Box(Modifier.fillMaxSize().background(LiveTvColors.scrim), contentAlignment = Alignment.Center) { Column(Modifier.width(360.dp).background(LiveTvColors.surface, RoundedCornerShape(18.dp)).border(1.dp, LiveTvColors.outlineStrong, RoundedCornerShape(18.dp)).padding(18.dp)) { Text(channel.name, color = LiveTvColors.textPrimary, fontSize = 20.sp, fontFamily = UltraFonts.Serif); Spacer(Modifier.height(14.dp)); Card(onClick = onToggleLock, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text(if (locked) "Desbloquear canal" else "Bloquear canal", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) } } } }
+private fun ChannelContextMenu(channel: ChannelEntity, locked: Boolean, favorite: Boolean, now: EpgEntity?, onToggleFavorite: () -> Unit, onToggleLock: () -> Unit, onPlay: () -> Unit, onDismiss: () -> Unit) {
+    BackHandler { onDismiss() }
+    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim), contentAlignment = Alignment.Center) {
+        Column(Modifier.width(LiveTvDimensions.contextMenuWidth).background(LiveTvColors.surface, RoundedCornerShape(18.dp)).border(1.dp, LiveTvColors.outlineStrong, RoundedCornerShape(18.dp)).padding(18.dp)) {
+            Text(channel.name, color = LiveTvColors.textPrimary, fontSize = 20.sp, fontFamily = UltraFonts.Serif)
+            Text(now?.title ?: "Sin programa actual", color = LiveTvColors.textMuted, fontSize = 13.sp, maxLines = 2)
+            Spacer(Modifier.height(14.dp))
+            Card(onClick = onPlay, colors = CardDefaults.colors(containerColor = LiveTvColors.accent)) { Text("Ver sin cerrar reproducción", color = Color.White, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+            Spacer(Modifier.height(8.dp))
+            Card(onClick = onToggleFavorite, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text(if (favorite) "Quitar de favoritos" else "Agregar a favoritos", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+            Spacer(Modifier.height(8.dp))
+            Card(onClick = onToggleLock, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text(if (locked) "Desbloquear canal" else "Bloquear canal", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+        }
+    }
+}
 private fun fmt(ms: Long): String = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(ms))
