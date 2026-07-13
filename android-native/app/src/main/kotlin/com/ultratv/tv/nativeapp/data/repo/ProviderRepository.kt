@@ -312,37 +312,47 @@ class ProviderRepository @Inject constructor(
             else cats.map { it.copy(locked = adultRegex.containsMatchIn(it.name)) }
 
         try {
-            step("Live categories…", 5)
+            step("Validando cuenta Xtream…", 3)
+            xtream.validateAccount(p)
+
+            step("Categorías de TV en vivo…", 5)
             val liveCats = xtream.fetchLiveCategories(p).let(::maybeLock)
-            step("Live channels…", 15)
+            step("Canales en vivo…", 15)
             val chans = xtream.fetchLiveStreams(p)
-            categoryDao.deleteForProviderKind(p.id, "LIVE")
-            categoryDao.upsertAll(liveCats)
-            channelDao.deleteForProvider(p.id)
-            step("Saving ${chans.size} channels…", 25)
-            insertChunked(chans) { channelDao.upsertAll(it) }
 
-            step("Movie categories…", 35)
+            step("Categorías de películas…", 35)
             val movCats = xtream.fetchVodCategories(p).let(::maybeLock)
-            step("Movies (${movCats.size} categories)…", 45)
+            step("Películas (${movCats.size} categorías)…", 45)
             val movs = xtream.fetchVodStreams(p)
-            categoryDao.deleteForProviderKind(p.id, "MOVIE")
-            categoryDao.upsertAll(movCats)
-            movieDao.deleteForProvider(p.id)
-            step("Saving ${movs.size} movies…", 55)
-            insertChunked(movs) { movieDao.upsertAll(it) }
 
-            step("Series categories…", 70)
+            step("Categorías de series…", 70)
             val serCats = xtream.fetchSeriesCategories(p).let(::maybeLock)
             step("Series…", 80)
             val series = xtream.fetchSeries(p)
+
+            if (chans.isEmpty() && movs.isEmpty() && series.isEmpty()) {
+                throw XtreamClient.XtreamException.EmptyCatalog()
+            }
+
+            categoryDao.deleteForProviderKind(p.id, "LIVE")
+            categoryDao.upsertAll(liveCats)
+            channelDao.deleteForProvider(p.id)
+            step("Guardando ${chans.size} canales…", 25)
+            insertChunked(chans) { channelDao.upsertAll(it) }
+
+            categoryDao.deleteForProviderKind(p.id, "MOVIE")
+            categoryDao.upsertAll(movCats)
+            movieDao.deleteForProvider(p.id)
+            step("Guardando ${movs.size} películas…", 55)
+            insertChunked(movs) { movieDao.upsertAll(it) }
+
             categoryDao.deleteForProviderKind(p.id, "SERIES")
             categoryDao.upsertAll(serCats)
             seriesDao.deleteForProvider(p.id)
-            step("Saving ${series.size} series…", 95)
+            step("Guardando ${series.size} series…", 95)
             insertChunked(series) { seriesDao.upsertAll(it) }
 
-            step("Done — ${chans.size} live · ${movs.size} movies · ${series.size} series", 100)
+            step("Sincronización completa — ${chans.size} canales · ${movs.size} películas · ${series.size} series", 100)
             return chans.size + movs.size + series.size
         } finally {
             syncStatus.clear()

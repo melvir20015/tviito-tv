@@ -15,8 +15,10 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import javax.inject.Inject
@@ -37,6 +39,46 @@ import javax.inject.Singleton
 @Singleton
 class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
     private val json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true }
+
+    sealed class XtreamException(message: String) : RuntimeException(message) {
+        class Network(message: String) : XtreamException(message)
+        class Http(code: Int) : XtreamException("Error HTTP $code al contactar el servidor Xtream.")
+        class InvalidJson : XtreamException("El servidor Xtream devolvió una respuesta JSON inválida.")
+        class UnsupportedResponse(message: String) : XtreamException(message)
+        class InvalidCredentials : XtreamException("Credenciales Xtream inválidas o cuenta no autorizada.")
+        class ExpiredAccount : XtreamException("La cuenta Xtream está expirada.")
+        class EmptyCatalog : XtreamException("La sincronización Xtream terminó con cero canales, películas y series. No se reemplazó el catálogo existente.")
+    }
+
+    suspend fun validateAccount(p: ProviderEntity) {
+        val root = fetchJson(p, null)
+        val obj = root as? JsonObject
+            ?: throw XtreamException.UnsupportedResponse("El servidor Xtream no devolvió una respuesta de cuenta válida.")
+        val userInfo = obj["user_info"] as? JsonObject
+        val serverInfo = obj["server_info"] as? JsonObject
+        if (userInfo == null && serverInfo == null) {
+            throw describeObjectError(obj) ?: XtreamException.UnsupportedResponse("El servidor no parece compatible con Xtream Codes.")
+        }
+        val auth = userInfo?.get("auth")
+        val authOk = when {
+            auth == null -> true
+            auth.str() == "1" -> true
+            auth.str()?.equals("true", ignoreCase = true) == true -> true
+            auth.jsonPrimitiveOrNull()?.booleanOrNull == true -> true
+            else -> false
+        }
+        if (!authOk) throw XtreamException.InvalidCredentials()
+        val status = userInfo?.get("status")?.str()?.trim().orEmpty()
+        if (status.equals("Expired", ignoreCase = true)) throw XtreamException.ExpiredAccount()
+        if (status.equals("Disabled", ignoreCase = true) || status.equals("Banned", ignoreCase = true)) {
+            throw XtreamException.InvalidCredentials()
+        }
+        val exp = userInfo?.get("exp_date")?.str()?.toLongOrNull()
+            ?: userInfo?.get("exp_date")?.jsonPrimitiveOrNull()?.longOrNull
+        if (exp != null && exp > 0 && exp * 1000L < System.currentTimeMillis()) {
+            throw XtreamException.ExpiredAccount()
+        }
+    }
 
     // ---- Live ----
 
@@ -172,18 +214,77 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
 
     // ---- Helpers ----
 
-    private suspend inline fun <T : Any> arrAt(p: ProviderEntity, action: String, transform: (JsonObject) -> T?): List<T> = runCatching {
-        val body = get("${p.baseUrl}/player_api.php?username=${p.username.urlEnc()}&password=${p.password.urlEnc()}&action=$action")
-        val arr = json.parseToJsonElement(body) as? JsonArray ?: return@runCatching emptyList<T>()
-        arr.mapNotNull { (it as? JsonObject)?.let(transform) }
-    }.getOrDefault(emptyList())
+    private suspend inline fun <T : Any> arrAt(p: ProviderEntity, action: String, transform: (JsonObject) -> T?): List<T> {
+        val root = fetchJson(p, action)
+        val arr = root as? JsonArray ?: throw describeObjectError(root as? JsonObject)
+            ?: XtreamException.UnsupportedResponse("El servidor Xtream devolvió una respuesta inesperada para $action.")
+        return arr.mapNotNull { (it as? JsonObject)?.let(transform) }
+    }
+
+    private suspend fun fetchJson(p: ProviderEntity, action: String?): JsonElement {
+        val url = buildApiUrl(p, action)
+        val body = get(url)
+        return try {
+            json.parseToJsonElement(body)
+        } catch (_: Throwable) {
+            throw XtreamException.InvalidJson()
+        }
+    }
+
+    private fun buildApiUrl(p: ProviderEntity, action: String?): String = buildString {
+        append(p.baseUrl)
+        append("/player_api.php?username=")
+        append(p.username.urlEnc())
+        append("&password=")
+        append(p.password.urlEnc())
+        if (action != null) {
+            append("&action=")
+            append(action)
+        }
+    }
+
+    private fun describeObjectError(obj: JsonObject?): XtreamException? {
+        if (obj == null) return null
+        val message = listOf("message", "error", "status")
+            .firstNotNullOfOrNull { key -> obj[key]?.str()?.takeIf { it.isNotBlank() } }
+            .orEmpty()
+        val userInfo = obj["user_info"] as? JsonObject
+        val auth = obj["auth"] ?: userInfo?.get("auth")
+        val status = userInfo?.get("status")?.str() ?: obj["status"]?.str()
+        val looksLikeCredentialProblem = auth?.str() == "0" ||
+            auth?.jsonPrimitiveOrNull()?.booleanOrNull == false ||
+            message.contains("auth", ignoreCase = true) ||
+            message.contains("credential", ignoreCase = true) ||
+            message.contains("password", ignoreCase = true) ||
+            message.contains("username", ignoreCase = true) ||
+            message.contains("invalid", ignoreCase = true) ||
+            status.equals("Disabled", ignoreCase = true) ||
+            status.equals("Banned", ignoreCase = true)
+        if (status.equals("Expired", ignoreCase = true) || message.contains("expir", ignoreCase = true)) {
+            return XtreamException.ExpiredAccount()
+        }
+        if (looksLikeCredentialProblem) return XtreamException.InvalidCredentials()
+        if (obj.keys.any { it in setOf("user_info", "server_info", "message", "error", "auth", "status") }) {
+            return XtreamException.UnsupportedResponse(
+                message.ifBlank { "El servidor Xtream devolvió un objeto de estado en lugar de un catálogo." }
+            )
+        }
+        return null
+    }
 
     private fun JsonElement.str(): String? = (this as? JsonPrimitive)?.contentOrNull
+    private fun JsonElement.jsonPrimitiveOrNull(): JsonPrimitive? = this as? JsonPrimitive
 
     private suspend fun get(url: String): String = withContext(Dispatchers.IO) {
-        ok.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-            if (!resp.isSuccessful) error("HTTP ${resp.code} $url")
-            resp.body?.string().orEmpty()
+        try {
+            ok.newCall(Request.Builder().url(url).build()).execute().use { resp ->
+                if (!resp.isSuccessful) throw XtreamException.Http(resp.code)
+                resp.body?.string().orEmpty()
+            }
+        } catch (t: XtreamException) {
+            throw t
+        } catch (_: Throwable) {
+            throw XtreamException.Network("No se pudo conectar con el servidor Xtream.")
         }
     }
 
