@@ -205,6 +205,9 @@ enum class StringKey(val defaultValue: String) {
     LiveAllChannels("All channels"),
     LiveChannelsCountTemplate("%1\$d channels"),
     LiveNoChannelsInCategory("No channels in this category."),
+    LiveBackToCategories("Back to categories"),
+    LiveNow("Now"),
+    LiveChannelLocked("Channel locked"),
     LiveZappingEyebrow("ZAPPING"),
     LiveOnAirPill("ON AIR"),
     LiveThen("then"),
@@ -215,9 +218,10 @@ enum class StringKey(val defaultValue: String) {
     LiveSortAlphaAsc("A-Z"),
     LiveSortAlphaDesc("Z-A"),
     LiveSortFavorites("Favorites first"),
-    LiveSortManual("Manual"),
+    LiveSortManual("Manual order"),
+    LiveSortRecent("Most recent"),
     LivePreviewLoading("Loading preview…"),
-    LivePreviewError("Preview unavailable"),
+    LivePreviewError("Could not load preview"),
     LiveWatchChannel("Watch channel"),
     UpdateAvailableEyebrow("UPDATE AVAILABLE"),
     UpdateLater("Later"),
@@ -503,6 +507,9 @@ class Strings(
     val liveAllChannels: String get() = overrides[StringKey.LiveAllChannels] ?: StringKey.LiveAllChannels.defaultValue
     val liveChannelsCountTemplate: String get() = overrides[StringKey.LiveChannelsCountTemplate] ?: StringKey.LiveChannelsCountTemplate.defaultValue
     val liveNoChannelsInCategory: String get() = overrides[StringKey.LiveNoChannelsInCategory] ?: StringKey.LiveNoChannelsInCategory.defaultValue
+    val liveBackToCategories: String get() = overrides[StringKey.LiveBackToCategories] ?: StringKey.LiveBackToCategories.defaultValue
+    val liveNow: String get() = overrides[StringKey.LiveNow] ?: StringKey.LiveNow.defaultValue
+    val liveChannelLocked: String get() = overrides[StringKey.LiveChannelLocked] ?: StringKey.LiveChannelLocked.defaultValue
     val liveZappingEyebrow: String get() = overrides[StringKey.LiveZappingEyebrow] ?: StringKey.LiveZappingEyebrow.defaultValue
     val liveOnAirPill: String get() = overrides[StringKey.LiveOnAirPill] ?: StringKey.LiveOnAirPill.defaultValue
     val liveThen: String get() = overrides[StringKey.LiveThen] ?: StringKey.LiveThen.defaultValue
@@ -514,6 +521,7 @@ class Strings(
     val liveSortAlphaDesc: String get() = overrides[StringKey.LiveSortAlphaDesc] ?: StringKey.LiveSortAlphaDesc.defaultValue
     val liveSortFavorites: String get() = overrides[StringKey.LiveSortFavorites] ?: StringKey.LiveSortFavorites.defaultValue
     val liveSortManual: String get() = overrides[StringKey.LiveSortManual] ?: StringKey.LiveSortManual.defaultValue
+    val liveSortRecent: String get() = overrides[StringKey.LiveSortRecent] ?: StringKey.LiveSortRecent.defaultValue
     val livePreviewLoading: String get() = overrides[StringKey.LivePreviewLoading] ?: StringKey.LivePreviewLoading.defaultValue
     val livePreviewError: String get() = overrides[StringKey.LivePreviewError] ?: StringKey.LivePreviewError.defaultValue
     val liveWatchChannel: String get() = overrides[StringKey.LiveWatchChannel] ?: StringKey.LiveWatchChannel.defaultValue
@@ -810,6 +818,9 @@ private val ES: Strings by lazy {
         put(StringKey.LiveAllChannels, "Todos los canales")
         put(StringKey.LiveChannelsCountTemplate, "%1\$d canales")
         put(StringKey.LiveNoChannelsInCategory, "Sin canales en esta categoría.")
+        put(StringKey.LiveBackToCategories, "Volver a categorías")
+        put(StringKey.LiveNow, "Ahora")
+        put(StringKey.LiveChannelLocked, "Canal bloqueado")
         put(StringKey.LiveZappingEyebrow, "CAMBIO RÁPIDO")
         put(StringKey.LiveOnAirPill, "EN VIVO")
         put(StringKey.LiveThen, "después")
@@ -820,9 +831,10 @@ private val ES: Strings by lazy {
         put(StringKey.LiveSortAlphaAsc, "A-Z")
         put(StringKey.LiveSortAlphaDesc, "Z-A")
         put(StringKey.LiveSortFavorites, "Favoritos primero")
-        put(StringKey.LiveSortManual, "Manual")
+        put(StringKey.LiveSortManual, "Orden manual")
+        put(StringKey.LiveSortRecent, "Más recientes")
         put(StringKey.LivePreviewLoading, "Cargando previsualización…")
-        put(StringKey.LivePreviewError, "Previsualización no disponible")
+        put(StringKey.LivePreviewError, "No se pudo cargar la previsualización")
         put(StringKey.LiveWatchChannel, "Ver canal")
         put(StringKey.UpdateAvailableEyebrow, "ACTUALIZACIÓN DISPONIBLE")
         put(StringKey.UpdateLater, "Más tarde")

@@ -26,11 +26,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-/**
- * Sentinel category remoteId meaning "show every channel". The Tivimate-style
- * UI renders this as a pinned "All channels" entry at the top of the category
- * list.
- */
+/** Sentinel category remoteId meaning "show every channel". */
 const val CATEGORY_ALL = "__all__"
 
 private data class LiveInputs(
@@ -45,17 +41,18 @@ fun sortLiveChannels(
     favoriteRemoteIds: Set<String>,
     mode: LiveChannelSortMode,
 ): List<ChannelEntity> {
-    val providerOrder = compareBy<ChannelEntity> { it.providerPosition }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    val providerOrder = compareBy<ChannelEntity> { it.providerPosition }
+        .thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
     val manualOrder = compareBy<ChannelEntity> { if (it.userPosition == 0) Int.MAX_VALUE else it.userPosition }
         .then(providerOrder)
     return when (mode) {
-        LiveChannelSortMode.PROVIDER -> channels.sortedWith(manualOrder)
+        LiveChannelSortMode.PROVIDER -> channels.sortedWith(providerOrder)
         LiveChannelSortMode.MANUAL -> channels.sortedWith(manualOrder)
         LiveChannelSortMode.ALPHA_ASC -> channels.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
         LiveChannelSortMode.ALPHA_DESC -> channels.sortedWith(compareByDescending<ChannelEntity> { it.name.lowercase() })
         LiveChannelSortMode.FAVORITES_FIRST -> channels.sortedWith(
             compareBy<ChannelEntity> { if (it.remoteId in favoriteRemoteIds) 0 else 1 }
-                .then(manualOrder),
+                .then(providerOrder),
         )
     }
 }
@@ -122,6 +119,11 @@ class LiveViewModel @Inject constructor(
         .map { it.liveChannelSortMode }
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveChannelSortMode.PROVIDER)
+
+    val showChannelNumbers: StateFlow<Boolean> = userPrefs.flow
+        .map { it.showChannelNumbers }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), true)
 
     fun setSortMode(mode: LiveChannelSortMode) {
         viewModelScope.launch { userPrefs.setLiveChannelSortMode(mode) }
@@ -259,7 +261,7 @@ class LiveViewModel @Inject constructor(
 
     /**
      * Full programme list for the channel the user is hovering, used by the
-     * TiviMate-style "tonight" schedule column. We compute the window as
+     * expanded schedule. We compute the window as
      * yesterday 18:00 → tomorrow 04:00 so the list always shows a few past
      * entries (matching the user's reference screenshot) plus the rest of
      * today and the early hours of tomorrow.

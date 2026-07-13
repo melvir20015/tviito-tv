@@ -8,9 +8,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -40,6 +40,14 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import coil.compose.AsyncImage
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.prefs.LiveChannelSortMode
@@ -48,30 +56,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.graphics.Brush
 import com.ultratv.tv.nativeapp.ui.theme.UltraFonts
 import com.ultratv.tv.nativeapp.ui.theme.UltraTokens
-import com.ultratv.tv.nativeapp.ui.components.UltraIcon
 import com.ultratv.tv.nativeapp.ui.common.ChannelLogo
 
-/**
- * Tivimate-inspired Live TV layout. Two stacked panes:
- *
- *   ┌──────────────────────┬──────────────────────────────────────────┐
- *   │  Categories          │  Channels in selected category           │
- *   │  • All channels      │  ┌─────┐ 001  TF1                         │
- *   │  • News              │  ┌─────┐ 002  France 2                    │
- *   │  • Sport             │  ┌─────┐ 003  M6                          │
- *   │  • Kids              │  …                                        │
- *   └──────────────────────┴──────────────────────────────────────────┘
- *
- * The right pane only renders channels for the selected category, so even on
- * a 50k-channel provider only ~hundreds are composed at any time — that's
- * the main lag fix.
- */
-@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+/** Live TV uses progressive layers: category selection first, then a focused channel surface. */
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class, ExperimentalAnimationApi::class)
 @Composable
 fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) {
     val cats by vm.categories.collectAsState()
@@ -80,162 +72,125 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
     val sortMode by vm.sortMode.collectAsState()
-    // Channel awaiting PIN unlock; non-null while the dialog is up.
-    var pinPrompt by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.ChannelEntity?>(null) }
-    // Currently focused channel for the preview pane (defaults to the first one).
-    var activeIdx by remember(chans.size) { mutableStateOf(0) }
+    val showChannelNumbers by vm.showChannelNumbers.collectAsState()
+    var pinPrompt by remember { mutableStateOf<ChannelEntity?>(null) }
+    var showingChannels by remember { mutableStateOf(false) }
+    var activeChannelId by remember { mutableStateOf<Long?>(null) }
+    val categoryFocus = remember { FocusRequester() }
+    val firstChannelFocus = remember { FocusRequester() }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
 
-    Row(Modifier.fillMaxSize().padding(top = 76.dp)) {
-        // ---- Left pane: categories (200 dp — compact, focus-only) ----
-        Column(
-            modifier = Modifier
-                .width(200.dp)
-                .fillMaxHeight()
-                .clipToBounds()
-                .padding(top = 20.dp, end = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            Text(
-                S.categories.uppercase(),
-                color = UltraTokens.Fg3,
-                fontSize = 11.sp,
-                letterSpacing = 2.3.sp,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.padding(start = 24.dp, bottom = 14.dp),
-            )
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                item("__all__") {
-                    CategoryRow(
-                        label = S.liveAllChannels,
-                        selected = selected == CATEGORY_ALL,
-                        onClick = { vm.selectCategory(CATEGORY_ALL) },
-                    )
-                }
-                items(cats, key = { it.id }) { cat ->
-                    CategoryRow(
-                        label = prettyCategoryName(cat.name) + if (cat.locked) "  🔒" else "",
-                        selected = selected == cat.remoteId,
-                        onClick = { vm.selectCategory(cat.remoteId) },
-                    )
+    BackHandler(enabled = showingChannels) { showingChannels = false }
+
+    LaunchedEffect(chans, showingChannels) {
+        if (chans.isEmpty()) activeChannelId = null
+        else if (activeChannelId == null || chans.none { it.id == activeChannelId }) activeChannelId = chans.first().id
+        if (showingChannels && chans.isNotEmpty()) runCatching { firstChannelFocus.requestFocus() }
+    }
+    LaunchedEffect(showingChannels) {
+        if (!showingChannels) runCatching { categoryFocus.requestFocus() }
+    }
+
+    val selectedTitle = if (selected == CATEGORY_ALL) S.liveAllChannels
+    else prettyCategoryName(cats.firstOrNull { it.remoteId == selected }?.name ?: S.liveAllChannels)
+    val active = chans.firstOrNull { it.id == activeChannelId } ?: chans.firstOrNull()
+
+    AnimatedContent(
+        targetState = showingChannels,
+        label = "live-layer-transition",
+        modifier = Modifier.fillMaxSize().padding(top = 76.dp),
+    ) { channelsLayer ->
+        if (!channelsLayer) {
+            Column(Modifier.fillMaxSize().padding(horizontal = 56.dp, vertical = 28.dp)) {
+                Text(S.live.uppercase(), color = UltraTokens.Fg, fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                Text(S.categories.uppercase(), color = UltraTokens.Fg3, fontSize = 11.sp, letterSpacing = 2.3.sp)
+                Spacer(Modifier.height(22.dp))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 28.dp)) {
+                    item(CATEGORY_ALL) {
+                        CategoryRow(
+                            label = S.liveAllChannels,
+                            selected = selected == CATEGORY_ALL,
+                            count = chans.size.takeIf { selected == CATEGORY_ALL },
+                            modifier = Modifier.focusRequester(categoryFocus),
+                            onClick = { vm.selectCategory(CATEGORY_ALL); showingChannels = true },
+                        )
+                    }
+                    items(cats, key = { it.id }) { cat ->
+                        CategoryRow(
+                            label = prettyCategoryName(cat.name) + if (cat.locked) "  🔒" else "",
+                            selected = selected == cat.remoteId,
+                            count = null,
+                            onClick = { vm.selectCategory(cat.remoteId); showingChannels = true },
+                        )
+                    }
                 }
             }
-        }
-
-        // Thin vertical divider
-        Box(
-            Modifier
-                .width(1.dp)
-                .fillMaxHeight()
-                .background(UltraTokens.Line),
-        )
-
-        // ---- Middle pane: channels (420 dp — readable but compact) ----
-        Column(
-            modifier = Modifier
-                .width(420.dp)
-                .fillMaxHeight()
-                .clipToBounds()
-                .padding(top = 20.dp, start = 0.dp),
-            verticalArrangement = Arrangement.spacedBy(0.dp),
-        ) {
-            val title = if (selected == CATEGORY_ALL) S.liveAllChannels
-            else prettyCategoryName(cats.firstOrNull { it.remoteId == selected }?.name ?: "")
-            Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        title.uppercase(),
-                        color = UltraTokens.Fg3,
-                        fontSize = 11.sp,
-                        letterSpacing = 2.3.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        S.liveChannelsCountTemplate.format(chans.size),
-                        fontFamily = UltraFonts.Mono,
-                        fontSize = 11.sp,
-                        color = UltraTokens.Fg4,
-                    )
+        } else {
+            Column(Modifier.fillMaxSize().padding(horizontal = 36.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
+                    Column {
+                        Text("${S.live}  >  $selectedTitle", color = UltraTokens.Fg2, fontSize = 15.sp, maxLines = 1)
+                        Text(S.liveChannelsCountTemplate.format(chans.size), color = UltraTokens.Fg4, fontSize = 11.sp, fontFamily = UltraFonts.Mono)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(S.liveBackToCategories, color = UltraTokens.Fg3, fontSize = 12.sp)
+                        SortModeRow(sortMode = sortMode, onSelect = vm::setSortMode)
+                    }
                 }
-                Spacer(Modifier.height(10.dp))
-                SortModeRow(sortMode = sortMode, onSelect = vm::setSortMode)
-            }
 
-            val listState = rememberLazyListState()
-            // Reset scroll when the user switches category so they always see
-            // the top of the new list, like Tivimate.
-            LaunchedEffect(selected) { listState.scrollToItem(0) }
-
-            if (chans.isEmpty()) {
-                Text(
-                    S.liveNoChannelsInCategory,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                LazyColumn(
-                    state = listState,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                    contentPadding = PaddingValues(end = 8.dp),
-                ) {
-                    itemsIndexed(chans, key = { _, c -> c.id }) { i, c ->
-                        val isLocked = "${c.providerId}:${c.remoteId}" in locked
-                        val nn = nowNext[c.id]
-                        ChannelRow(
-                            channel = c,
-                            position = i + 1,
+                AnimatedVisibility(visible = active != null, enter = fadeIn(), exit = fadeOut()) {
+                    active?.let { channel ->
+                        val isLocked = "${channel.providerId}:${channel.remoteId}" in locked
+                        LivePreviewPane(
+                            channel = channel,
+                            vm = vm,
+                            nowProgramme = nowNext[channel.id]?.first,
+                            nextProgramme = nowNext[channel.id]?.second,
                             locked = isLocked,
-                            active = i == activeIdx,
-                            nowProgramme = nn?.first,
-                            nextProgramme = nn?.second,
-                            onFocus = { activeIdx = i },
-                        ) {
-                            activeIdx = i
-                            if (isLocked) pinPrompt = c
-                            else vm.resolveAndPlay(c, onPlay)
+                            onWatch = {
+                                if (isLocked) pinPrompt = channel else vm.resolveAndPlay(channel, onPlay)
+                            },
+                            onPlayCatchup = { url, title -> onPlay(url, title) },
+                            modifier = Modifier.fillMaxWidth().height(260.dp),
+                        )
+                    }
+                }
+
+                val listState = rememberLazyListState()
+                LaunchedEffect(selected) { listState.scrollToItem(0) }
+                if (chans.isEmpty()) {
+                    Text(S.liveNoChannelsInCategory, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                } else {
+                    LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(6.dp), contentPadding = PaddingValues(bottom = 32.dp), modifier = Modifier.weight(1f)) {
+                        itemsIndexed(chans, key = { _, c -> c.id }) { i, c ->
+                            val isLocked = "${c.providerId}:${c.remoteId}" in locked
+                            val nn = nowNext[c.id]
+                            ChannelRow(
+                                channel = c,
+                                position = i + 1,
+                                showNumber = showChannelNumbers,
+                                locked = isLocked,
+                                active = c.id == active?.id,
+                                nowProgramme = nn?.first,
+                                nextProgramme = nn?.second,
+                                modifier = if (i == 0) Modifier.focusRequester(firstChannelFocus) else Modifier,
+                                onFocus = { activeChannelId = c.id },
+                            ) {
+                                activeChannelId = c.id
+                                if (isLocked) pinPrompt = c else vm.resolveAndPlay(c, onPlay)
+                            }
                         }
                     }
                 }
             }
         }
-
-        // Divider between channels and preview
-        Box(
-            Modifier
-                .width(1.dp)
-                .fillMaxHeight()
-                .background(UltraTokens.Line),
-        )
-
-        // ---- Right pane: live mini-player + now/next + Watch CTA ----
-        val active = chans.getOrNull(activeIdx)
-        if (active != null) {
-            LivePreviewPane(
-                channel = active,
-                vm = vm,
-                nowProgramme = nowNext[active.id]?.first,
-                nextProgramme = nowNext[active.id]?.second,
-                onWatch = {
-                    val isLocked = "${active.providerId}:${active.remoteId}" in locked
-                    if (isLocked) pinPrompt = active
-                    else vm.resolveAndPlay(active, onPlay)
-                },
-                onPlayCatchup = { url, title -> onPlay(url, title) },
-            )
-        }
     }
 
-    // PIN dialog when the user clicks a locked channel.
     pinPrompt?.let { ch ->
         com.ultratv.tv.nativeapp.ui.parental.PinPromptDialog(
             title = "🔒 ${ch.name}",
-            onUnlocked = {
-                pinPrompt = null
-                vm.resolveAndPlay(ch, onPlay)
-            },
+            onUnlocked = { pinPrompt = null; vm.resolveAndPlay(ch, onPlay) },
             onCancel = { pinPrompt = null },
         )
     }
@@ -243,13 +198,14 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-private fun CategoryRow(label: String, selected: Boolean, onClick: () -> Unit) {
+private fun CategoryRow(label: String, selected: Boolean, count: Int? = null, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val focused by interaction.collectIsFocusedAsState()
     val highlighted = selected || focused
     Box {
         Card(
             onClick = onClick,
+            modifier = modifier,
             interactionSource = interaction,
             shape = CardDefaults.shape(RoundedCornerShape(0.dp)),
             colors = CardDefaults.colors(
@@ -265,11 +221,20 @@ private fun CategoryRow(label: String, selected: Boolean, onClick: () -> Unit) {
             ) {
                 Text(
                     label,
-                    fontSize = 14.sp,
+                    fontSize = 18.sp,
                     fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                     color = if (highlighted) UltraTokens.Fg else UltraTokens.Fg3,
                     maxLines = 1,
+                    modifier = Modifier.weight(1f),
                 )
+                if (count != null) {
+                    Text(
+                        com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveChannelsCountTemplate.format(count),
+                        fontSize = 12.sp,
+                        color = UltraTokens.Fg4,
+                        fontFamily = UltraFonts.Mono,
+                    )
+                }
             }
         }
         if (selected) {
@@ -330,6 +295,8 @@ private fun ChannelRow(
     active: Boolean = false,
     nowProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity? = null,
     nextProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity? = null,
+    showNumber: Boolean = true,
+    modifier: Modifier = Modifier,
     onFocus: () -> Unit = {},
     onClick: () -> Unit,
 ) {
@@ -341,6 +308,7 @@ private fun ChannelRow(
     val highlight = focused || active
     Card(
         onClick = onClick,
+        modifier = modifier,
         interactionSource = interaction,
         shape = CardDefaults.shape(RoundedCornerShape(0.dp)),
         colors = com.ultratv.tv.nativeapp.ui.theme.ultraCardColors(
@@ -355,14 +323,16 @@ private fun ChannelRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(
-                "%02d".format(position),
-                color = if (highlight) UltraTokens.Accent else UltraTokens.Fg4,
-                fontSize = 13.sp,
-                fontFamily = UltraFonts.Mono,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.width(32.dp),
-            )
+            if (showNumber) {
+                Text(
+                    "%02d".format(position),
+                    color = if (highlight) UltraTokens.Accent else UltraTokens.Fg4,
+                    fontSize = 13.sp,
+                    fontFamily = UltraFonts.Mono,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.width(42.dp),
+                )
+            }
             Box(
                 Modifier
                     .size(44.dp)
@@ -389,9 +359,35 @@ private fun ChannelRow(
                     )
                 }
                 if (nowProgramme != null) {
+                    val nowMs = System.currentTimeMillis()
+                    val total = (nowProgramme.endMs - nowProgramme.startMs).coerceAtLeast(1)
+                    val elapsed = (nowMs - nowProgramme.startMs).coerceIn(0, total)
+                    val pct = elapsed.toFloat() / total.toFloat()
                     Text(
-                        nowProgramme.title + (nextProgramme?.let { "  ·  ${com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveThen} ${it.title}" } ?: ""),
+                        "${formatHm(nowProgramme.startMs)}–${formatHm(nowProgramme.endMs)}  ${nowProgramme.title}" +
+                            (nextProgramme?.let { "  ·  ${com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveThen} ${it.title}" } ?: ""),
                         color = UltraTokens.Fg3,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.height(5.dp))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .background(Color(0x24FFFFFF), RoundedCornerShape(2.dp)),
+                    ) {
+                        Box(
+                            Modifier
+                                .fillMaxWidth(pct)
+                                .height(3.dp)
+                                .background(if (highlight) UltraTokens.Accent else UltraTokens.Line2, RoundedCornerShape(2.dp)),
+                        )
+                    }
+                } else {
+                    Text(
+                        com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveNoEpgForChannel,
+                        color = UltraTokens.Fg4,
                         fontSize = 11.sp,
                         maxLines = 1,
                     )
@@ -408,17 +404,19 @@ private fun LivePreviewPane(
     vm: LiveViewModel,
     nowProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity?,
     nextProgramme: com.ultratv.tv.nativeapp.data.db.EpgEntity?,
+    locked: Boolean = false,
     onWatch: () -> Unit,
     onPlayCatchup: (url: String, title: String) -> Unit = { _, _ -> },
+    modifier: Modifier = Modifier,
 ) {
-    val nowTitle = nowProgramme?.title ?: "Programme en cours"
-    val nextTitle = nextProgramme?.title ?: "À venir"
+    val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
+    val nowTitle = nowProgramme?.title ?: S.liveNoEpgForChannel
+    val nextTitle = nextProgramme?.title ?: S.liveThen
     val hue = channel.name.hashCode()
     val context = androidx.compose.ui.platform.LocalContext.current
 
-    // One mini-player kept alive while the screen is on. We swap its
-    // MediaItem with a debounce when the focused channel changes, so D-pad
-    // navigation doesn't hammer the network with stalker create_link calls.
+    // Keep a single muted preview player while this pane is composed. Channel
+    // changes are debounced so fast D-pad navigation does not hammer providers.
     val miniPlayer = remember {
         androidx.media3.exoplayer.ExoPlayer.Builder(context).build().apply {
             playWhenReady = true
@@ -435,9 +433,8 @@ private fun LivePreviewPane(
         loading = true
         previewError = false
         resolvedUrl = null
-        // 700 ms debounce: user is scrolling, don't hit the network on each
-        // row. resolvePreviewUrl swallows Stalker `create_link` calls when
-        // needed; for plain URLs it's a no-op.
+        // Debounce focus changes: scrolling channels must not start full playback
+        // or trigger excessive provider URL resolution.
         kotlinx.coroutines.delay(700)
         val url = runCatching { vm.resolvePreviewUrl(channel) }.getOrNull()
         resolvedUrl = url
@@ -449,16 +446,16 @@ private fun LivePreviewPane(
         }
     }
 
-    Column(
-        Modifier
-            .fillMaxSize()
-            .padding(30.dp),
-        verticalArrangement = Arrangement.spacedBy(22.dp),
+    Row(
+        modifier.padding(0.dp),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         // 16:9 preview window with the live mini-player
         Box(
             Modifier
-                .fillMaxWidth()
+                .weight(0.82f)
+                .fillMaxHeight()
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(18.dp))
                 .background(
@@ -482,7 +479,7 @@ private fun LivePreviewPane(
                 },
             )
             // Fallback while loading or unresolved: big channel logo overlay.
-            if (resolvedUrl == null || loading) {
+            if (locked || resolvedUrl == null || loading) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     ChannelLogo(
                         name = channel.name,
@@ -496,9 +493,9 @@ private fun LivePreviewPane(
                 }
             }
 
-            if (loading || previewError) {
+            if (locked || loading || previewError) {
                 Text(
-                    if (loading) com.ultratv.tv.nativeapp.i18n.LocalStrings.current.livePreviewLoading else com.ultratv.tv.nativeapp.i18n.LocalStrings.current.livePreviewError,
+                    if (locked) S.liveChannelLocked else if (loading) S.livePreviewLoading else S.livePreviewError,
                     color = Color.White.copy(alpha = 0.82f),
                     fontSize = 13.sp,
                     modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
@@ -556,43 +553,31 @@ private fun LivePreviewPane(
             }
         }
 
-        // TiviMate-style full-day schedule of the focused channel.
-        var schedule by remember(channel.id) { mutableStateOf<List<com.ultratv.tv.nativeapp.data.db.EpgEntity>>(emptyList()) }
-        LaunchedEffect(channel.id) {
-            schedule = runCatching { vm.loadDaySchedule(channel.id) }.getOrDefault(emptyList())
-        }
-        DaySchedule(
-            channel = channel,
-            items = schedule,
-            onWatch = onWatch,
-            onCatchupPick = { prog ->
-                val url = com.ultratv.tv.nativeapp.data.repo.Catchup.buildUrl(channel, prog)
-                if (url != null) onPlayCatchup(url, "${channel.name} — ${prog.title}")
-            },
-            onRemindPick = { prog -> vm.addReminder(channel, prog) },
-            modifier = Modifier.weight(1f),
-        )
-
-        // D-pad hint bar — flow horizontally with explicit no-wrap so on a
-        // cramped TV the chips don't break per character.
-        androidx.compose.foundation.layout.FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp),
-            maxItemsInEachRow = 4,
-        ) {
-            Hint("OK", com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveWatchChannel)
-            Hint("▲▼", "Zap")
-            Hint("★", com.ultratv.tv.nativeapp.i18n.LocalStrings.current.favorites)
+        Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ProgrammeCard(
+                label = S.liveNow,
+                title = if (locked) S.liveChannelLocked else nowTitle,
+                sub = nowProgramme?.let { "${formatHm(it.startMs)} — ${formatHm(it.endMs)}" } ?: S.liveNoEpgForChannel,
+                accent = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            ProgrammeCard(
+                label = S.liveThen,
+                title = nextTitle,
+                sub = nextProgramme?.let { formatHm(it.startMs) } ?: S.liveNoEpgForChannel,
+                accent = false,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Hint("OK", S.liveWatchChannel)
+                Hint("BACK", S.liveBackToCategories)
+            }
         }
     }
 }
 
-/**
- * Vertical full-day schedule for the focused channel — the TiviMate
- * "tonight's schedule" column. Past programmes appear muted, the current
- * one in accent, the rest with a subdued time + title. The whole column
- * scrolls; the current programme auto-scrolls into view.
- */
+/** Full-day schedule for the focused channel. Current programmes are accented;
+ * past and upcoming entries remain readable for D-pad selection. */
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
 private fun DaySchedule(
@@ -710,8 +695,7 @@ private fun ScheduleRow(
                 fontWeight = if (isCurrent) FontWeight.Medium else FontWeight.Normal,
                 maxLines = 1,
             )
-            // Past programme + catchup support → small "Reprise" button that
-            // builds the catchup URL and starts the player.
+            // Past programme + catch-up support: expose a small replay action.
             if (past && canCatchup) {
                 Spacer(Modifier.weight(1f))
                 androidx.tv.material3.Card(
@@ -730,7 +714,7 @@ private fun ScheduleRow(
                         Text("▶", color = UltraTokens.Accent, fontSize = 11.sp)
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "REPRISE",
+                            "REPLAY",
                             color = UltraTokens.Accent,
                             fontSize = 9.sp,
                             letterSpacing = 0.6.sp,
@@ -771,7 +755,7 @@ private fun ScheduleRow(
                         Text("⏰", fontSize = 11.sp)
                         Spacer(Modifier.width(4.dp))
                         Text(
-                            "RAPPEL",
+                            "REMIND",
                             color = UltraTokens.Fg3,
                             fontSize = 9.sp,
                             letterSpacing = 0.6.sp,
@@ -822,7 +806,7 @@ private fun TonightSchedule(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    now?.title ?: "Programme en cours",
+                    now?.title ?: com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveNoEpgForChannel,
                     color = UltraTokens.Fg,
                     fontFamily = UltraFonts.Serif,
                     fontSize = 26.sp,

@@ -7,9 +7,12 @@ import org.junit.Test
 
 class LiveChannelSortTest {
     @Test
-    fun providerOrderUsesProviderPositionByDefault() {
+    fun providerOrderUsesProviderPositionByDefaultAndIgnoresManualPins() {
         val sorted = sortLiveChannels(
-            listOf(ch("b", "Beta", providerPosition = 2), ch("a", "Alpha", providerPosition = 1)),
+            listOf(
+                ch("b", "Beta", providerPosition = 2, userPosition = 1),
+                ch("a", "Alpha", providerPosition = 1),
+            ),
             emptySet(),
             LiveChannelSortMode.PROVIDER,
         )
