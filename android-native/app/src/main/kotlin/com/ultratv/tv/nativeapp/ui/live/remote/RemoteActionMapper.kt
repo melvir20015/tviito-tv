@@ -1,7 +1,8 @@
 package com.ultratv.tv.nativeapp.ui.live.remote
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.nativeKeyEvent
+import androidx.compose.ui.input.key.key
 import com.ultratv.tv.nativeapp.ui.live.LiveTvAction
 import com.ultratv.tv.nativeapp.ui.live.LiveTvDirection
 import com.ultratv.tv.nativeapp.ui.live.LiveTvMode
@@ -90,18 +91,55 @@ object RemoteActionMapper {
         return defaultsFor(surface)[command.command]
     }
 
-    fun commandFor(event: KeyEvent): RemoteCommandEvent? {
-        val nativeEvent = event.nativeKeyEvent
-        val longPress = nativeEvent.isLongPress
-        return when (nativeEvent.keyCode) {
+    fun commandFor(event: KeyEvent): RemoteCommandEvent? = when (event.key) {
+        Key.Enter,
+        Key.DirectionCenter,
+        Key.NumPadEnter -> RemoteCommandEvent(RemoteCommand.OK)
+        Key.DirectionLeft -> RemoteCommandEvent(RemoteCommand.LEFT)
+        Key.DirectionRight -> RemoteCommandEvent(RemoteCommand.RIGHT)
+        Key.DirectionUp -> RemoteCommandEvent(RemoteCommand.UP)
+        Key.DirectionDown -> RemoteCommandEvent(RemoteCommand.DOWN)
+        Key.Back -> RemoteCommandEvent(RemoteCommand.BACK)
+        Key.Menu -> RemoteCommandEvent(RemoteCommand.MENU)
+        Key.ChannelUp,
+        Key.PageUp -> RemoteCommandEvent(RemoteCommand.CHANNEL_UP)
+        Key.ChannelDown,
+        Key.PageDown -> RemoteCommandEvent(RemoteCommand.CHANNEL_DOWN)
+        Key.Zero,
+        Key.NumPad0 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 0)
+        Key.One,
+        Key.NumPad1 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 1)
+        Key.Two,
+        Key.NumPad2 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 2)
+        Key.Three,
+        Key.NumPad3 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 3)
+        Key.Four,
+        Key.NumPad4 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 4)
+        Key.Five,
+        Key.NumPad5 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 5)
+        Key.Six,
+        Key.NumPad6 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 6)
+        Key.Seven,
+        Key.NumPad7 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 7)
+        Key.Eight,
+        Key.NumPad8 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 8)
+        Key.Nine,
+        Key.NumPad9 -> RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 9)
+        else -> null
+    }
+
+    fun commandFor(event: AndroidKeyEvent): RemoteCommandEvent? = commandFor(event.keyCode, event.isLongPress)
+
+    fun commandFor(keyCode: Int, isLongPress: Boolean = false): RemoteCommandEvent? {
+        return when (keyCode) {
             AndroidKeyEvent.KEYCODE_ENTER,
             AndroidKeyEvent.KEYCODE_DPAD_CENTER,
-            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> RemoteCommandEvent(if (longPress) RemoteCommand.LONG_OK else RemoteCommand.OK)
-            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> RemoteCommandEvent(if (longPress) RemoteCommand.LONG_LEFT else RemoteCommand.LEFT)
+            AndroidKeyEvent.KEYCODE_NUMPAD_ENTER -> RemoteCommandEvent(if (isLongPress) RemoteCommand.LONG_OK else RemoteCommand.OK)
+            AndroidKeyEvent.KEYCODE_DPAD_LEFT -> RemoteCommandEvent(if (isLongPress) RemoteCommand.LONG_LEFT else RemoteCommand.LEFT)
             AndroidKeyEvent.KEYCODE_DPAD_RIGHT -> RemoteCommandEvent(RemoteCommand.RIGHT)
             AndroidKeyEvent.KEYCODE_DPAD_UP -> RemoteCommandEvent(RemoteCommand.UP)
             AndroidKeyEvent.KEYCODE_DPAD_DOWN -> RemoteCommandEvent(RemoteCommand.DOWN)
-            AndroidKeyEvent.KEYCODE_BACK -> RemoteCommandEvent(if (longPress) RemoteCommand.LONG_BACK else RemoteCommand.BACK)
+            AndroidKeyEvent.KEYCODE_BACK -> RemoteCommandEvent(if (isLongPress) RemoteCommand.LONG_BACK else RemoteCommand.BACK)
             AndroidKeyEvent.KEYCODE_MENU -> RemoteCommandEvent(RemoteCommand.MENU)
             AndroidKeyEvent.KEYCODE_CHANNEL_UP,
             AndroidKeyEvent.KEYCODE_PAGE_UP -> RemoteCommandEvent(RemoteCommand.CHANNEL_UP)

@@ -43,6 +43,15 @@ class RemoteActionMapperTest {
     }
 
     @Test
+    fun `android key codes map without compose native key extension`() {
+        assertEquals(RemoteCommandEvent(RemoteCommand.OK), RemoteActionMapper.commandFor(android.view.KeyEvent.KEYCODE_DPAD_CENTER))
+        assertEquals(RemoteCommandEvent(RemoteCommand.LONG_OK), RemoteActionMapper.commandFor(android.view.KeyEvent.KEYCODE_DPAD_CENTER, isLongPress = true))
+        assertEquals(RemoteCommandEvent(RemoteCommand.LONG_BACK), RemoteActionMapper.commandFor(android.view.KeyEvent.KEYCODE_BACK, isLongPress = true))
+        assertEquals(RemoteCommandEvent(RemoteCommand.CHANNEL_UP), RemoteActionMapper.commandFor(android.view.KeyEvent.KEYCODE_CHANNEL_UP))
+        assertEquals(RemoteCommandEvent(RemoteCommand.NUMBER_INPUT, 9), RemoteActionMapper.commandFor(android.view.KeyEvent.KEYCODE_9))
+    }
+
+    @Test
     fun `surface is inferred from live tv mode`() {
         assertEquals(RemoteSurface.PLAYER, RemoteActionMapper.surfaceFor(LiveTvMode.PLAYER_FULLSCREEN))
         assertEquals(RemoteSurface.TV_GUIDE, RemoteActionMapper.surfaceFor(LiveTvMode.TV_GUIDE))
