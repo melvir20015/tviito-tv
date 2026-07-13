@@ -18,6 +18,7 @@ private val Context.userPrefsDs by preferencesDataStore(name = "user_prefs")
 enum class SidebarPosition { LEFT, TOP }
 enum class AppTheme { DARK, AMOLED, BLUE, LIGHT }
 enum class DefaultPlayer { INTERNAL, EXTERNAL }
+enum class LiveChannelSortMode { PROVIDER, ALPHA_ASC, ALPHA_DESC, FAVORITES_FIRST, MANUAL }
 
 data class UserPrefs(
     val sidebarPosition: SidebarPosition = SidebarPosition.LEFT,
@@ -52,6 +53,7 @@ data class UserPrefs(
      *  silently. Defaults to false so fork builds do not send diagnostics
      *  before explicit user and build-time configuration opt-in. */
     val telemetryEnabled: Boolean = false,
+    val liveChannelSortMode: LiveChannelSortMode = LiveChannelSortMode.PROVIDER,
 
     // Playback / TV-quality knobs — exposed in Settings.
     /** Buffer target in seconds. Media3's default is 15 s, which is decent but
@@ -92,6 +94,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
         val language = stringPreferencesKey("language")
         val configPassword = stringPreferencesKey("config_password")
         val telemetry = booleanPreferencesKey("telemetry_enabled")
+        val liveSort = stringPreferencesKey("live_channel_sort_mode")
         val bufferSec = intPreferencesKey("buffer_seconds")
         val autoFrameRate = booleanPreferencesKey("auto_frame_rate")
         val preferSwDec = booleanPreferencesKey("prefer_software_decoder")
@@ -118,6 +121,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
             language = p[Keys.language] ?: "system",
             configPassword = p[Keys.configPassword] ?: "",
             telemetryEnabled = p[Keys.telemetry] ?: false,
+            liveChannelSortMode = runCatching { enumValueOf<LiveChannelSortMode>(p[Keys.liveSort] ?: LiveChannelSortMode.PROVIDER.name) }.getOrDefault(LiveChannelSortMode.PROVIDER),
             bufferSeconds = p[Keys.bufferSec] ?: 30,
             autoFrameRate = p[Keys.autoFrameRate] ?: true,
             preferSoftwareDecoder = p[Keys.preferSwDec] ?: false,
@@ -143,6 +147,7 @@ class UserPreferencesStore @Inject constructor(@ApplicationContext private val c
     suspend fun setLanguage(code: String) = update { it[Keys.language] = code }
     suspend fun setConfigPassword(pwd: String) = update { it[Keys.configPassword] = pwd }
     suspend fun setTelemetry(on: Boolean) = update { it[Keys.telemetry] = on }
+    suspend fun setLiveChannelSortMode(mode: LiveChannelSortMode) = update { it[Keys.liveSort] = mode.name }
     suspend fun setBufferSeconds(v: Int) = update { it[Keys.bufferSec] = v.coerceIn(5, 300) }
     suspend fun setAutoFrameRate(v: Boolean) = update { it[Keys.autoFrameRate] = v }
     suspend fun setPreferSoftwareDecoder(v: Boolean) = update { it[Keys.preferSwDec] = v }

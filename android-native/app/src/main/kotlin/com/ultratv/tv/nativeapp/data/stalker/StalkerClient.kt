@@ -105,7 +105,7 @@ class StalkerClient @Inject constructor(private val ok: OkHttpClient) {
             val rid = o["id"]?.str() ?: return@mapNotNull null
             val name = o["title"]?.str() ?: return@mapNotNull null
             CategoryEntity(providerId = p.id, kind = "LIVE", remoteId = rid, name = name)
-        }
+        }.mapIndexed { index, category -> category.copy(providerPosition = index) }
     }.getOrDefault(emptyList())
 
     suspend fun fetchLiveChannels(p: ProviderEntity, s: Session): List<ChannelEntity> = runCatching {
@@ -134,7 +134,7 @@ class StalkerClient @Inject constructor(private val ok: OkHttpClient) {
                 categoryId = genre,
                 streamUrl = "stalker://$cmd",   // sentinel — see resolvePlayUrl()
             )
-        }
+        }.mapIndexed { index, channel -> channel.copy(providerPosition = index) }
     }.getOrDefault(emptyList())
 
     // ---- VOD (Movies) ----

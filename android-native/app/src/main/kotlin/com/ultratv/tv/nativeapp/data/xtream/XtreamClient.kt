@@ -89,7 +89,7 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
         val rid = o["category_id"]?.str() ?: return@arrAt null
         val name = o["category_name"]?.str() ?: return@arrAt null
         CategoryEntity(providerId = p.id, kind = "LIVE", remoteId = rid, name = name)
-    }
+    }.mapIndexed { index, category -> category.copy(providerPosition = index) }
 
     suspend fun fetchLiveStreams(p: ProviderEntity): List<ChannelEntity> = arrAt(p, "get_live_streams") { o ->
         val sid = o["stream_id"]?.str() ?: return@arrAt null
@@ -113,7 +113,7 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
             catchupSource = null,
             catchupDays = if (tvArchive >= 1) archiveDuration.coerceAtLeast(1) else 0,
         )
-    }
+    }.mapIndexed { index, channel -> channel.copy(providerPosition = index) }
 
     // ---- VOD (Movies) ----
 

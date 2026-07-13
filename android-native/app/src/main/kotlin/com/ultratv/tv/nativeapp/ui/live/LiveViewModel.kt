@@ -5,7 +5,9 @@ import androidx.lifecycle.viewModelScope
 import com.ultratv.tv.nativeapp.data.db.CategoryEntity
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.prefs.HiddenCategoriesStore
+import com.ultratv.tv.nativeapp.data.prefs.LiveChannelSortMode
 import com.ultratv.tv.nativeapp.data.prefs.LockedChannelsStore
+import com.ultratv.tv.nativeapp.data.prefs.UserPreferencesStore
 import com.ultratv.tv.nativeapp.data.repo.CatalogRepository
 import com.ultratv.tv.nativeapp.data.repo.PlaybackContext
 import com.ultratv.tv.nativeapp.data.repo.ProviderRepository
@@ -31,6 +33,33 @@ import javax.inject.Inject
  */
 const val CATEGORY_ALL = "__all__"
 
+private data class LiveInputs(
+    val providers: List<com.ultratv.tv.nativeapp.data.db.ProviderEntity>,
+    val category: String,
+    val hidden: Set<String>,
+    val sortMode: LiveChannelSortMode,
+)
+
+fun sortLiveChannels(
+    channels: List<ChannelEntity>,
+    favoriteRemoteIds: Set<String>,
+    mode: LiveChannelSortMode,
+): List<ChannelEntity> {
+    val providerOrder = compareBy<ChannelEntity> { it.providerPosition }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+    val manualOrder = compareBy<ChannelEntity> { if (it.userPosition == 0) Int.MAX_VALUE else it.userPosition }
+        .then(providerOrder)
+    return when (mode) {
+        LiveChannelSortMode.PROVIDER -> channels.sortedWith(manualOrder)
+        LiveChannelSortMode.MANUAL -> channels.sortedWith(manualOrder)
+        LiveChannelSortMode.ALPHA_ASC -> channels.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
+        LiveChannelSortMode.ALPHA_DESC -> channels.sortedWith(compareByDescending<ChannelEntity> { it.name.lowercase() })
+        LiveChannelSortMode.FAVORITES_FIRST -> channels.sortedWith(
+            compareBy<ChannelEntity> { if (it.remoteId in favoriteRemoteIds) 0 else 1 }
+                .then(manualOrder),
+        )
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class LiveViewModel @Inject constructor(
@@ -38,6 +67,7 @@ class LiveViewModel @Inject constructor(
     private val catalog: CatalogRepository,
     private val hiddenStore: HiddenCategoriesStore,
     private val lockedStore: LockedChannelsStore,
+    private val userPrefs: UserPreferencesStore,
     private val playback: PlaybackContext,
     private val epgDaoArg: com.ultratv.tv.nativeapp.data.db.EpgDao,
     private val zapQueue: com.ultratv.tv.nativeapp.data.repo.LivePlaybackQueue,
@@ -86,6 +116,15 @@ class LiveViewModel @Inject constructor(
                 ?: return@launch
             channelDao.resetPositions(pid)
         }
+    }
+
+    val sortMode: StateFlow<LiveChannelSortMode> = userPrefs.flow
+        .map { it.liveChannelSortMode }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LiveChannelSortMode.PROVIDER)
+
+    fun setSortMode(mode: LiveChannelSortMode) {
+        viewModelScope.launch { userPrefs.setLiveChannelSortMode(mode) }
     }
 
     val lockedChannels: StateFlow<Set<String>> = lockedStore.locked
@@ -192,9 +231,9 @@ class LiveViewModel @Inject constructor(
      * still apply hidden-category filtering in-flight.
      */
     val channels: StateFlow<List<ChannelEntity>> =
-        combine(providers, _selectedCategory, hiddenStore.hidden) { ps, cat, hidden ->
-            Triple(ps, cat, hidden)
-        }.flatMapLatest { (ps, cat, hidden) ->
+        combine(providers, _selectedCategory, hiddenStore.hidden, sortMode) { ps, cat, hidden, mode ->
+            LiveInputs(ps, cat, hidden, mode)
+        }.flatMapLatest { (ps, cat, hidden, mode) ->
             val pid = ps.firstOrNull { it.active }?.id ?: ps.firstOrNull()?.id
             if (pid == null) flowOf(emptyList())
             else {
@@ -208,12 +247,9 @@ class LiveViewModel @Inject constructor(
                 } else {
                     catalog.channelsForCategory(pid, cat)
                 }
-                // Reorder so favorited live channels float to the top of every
-                // view. We re-use the existing FavoriteEntity table (kind="LIVE").
                 combine(base, catalog.favoritesByKind(pid, "LIVE")) { all, favs ->
                     val favIds = favs.map { it.remoteId }.toSet()
-                    val (pinned, rest) = all.partition { it.remoteId in favIds }
-                    pinned + rest
+                    sortLiveChannels(all, favIds, mode)
                 }
             }
         }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

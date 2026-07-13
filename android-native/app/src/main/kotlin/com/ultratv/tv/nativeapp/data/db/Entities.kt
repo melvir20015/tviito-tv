@@ -20,6 +20,7 @@ data class ProviderEntity(
     indices = [
         Index("providerId"),
         Index(value = ["providerId", "categoryId"]),
+        Index(value = ["providerId", "providerPosition"]),
         Index(value = ["providerId", "remoteId"], unique = true),
     ],
 )
@@ -42,19 +43,24 @@ data class ChannelEntity(
     val catchupSource: String? = null,
     /** Days of catch-up window the provider exposes (Xtream tv_archive_duration). */
     val catchupDays: Int = 0,
-    /** User-defined display position. 0 = natural order (sort by name). >0
-     *  pushes the channel to that absolute slot in the Live list, allowing
-     *  the favourites + frequently-watched to bubble to the top. */
+    /** Stable zero-based order received from the provider during the last catalog sync.
+     *  It is the default natural order for Live TV; fallback alphabetical order is
+     *  only used when older rows still have the migration default. */
+    val providerPosition: Int = 0,
+    /** User-defined display position. 0 = natural provider order. >0 pins or
+     *  manually places the channel ahead of the provider-ordered block. */
     val userPosition: Int = 0,
 )
 
-@Entity(tableName = "category", indices = [Index(value = ["providerId", "kind", "remoteId"], unique = true)])
+@Entity(tableName = "category", indices = [Index(value = ["providerId", "kind", "providerPosition"]), Index(value = ["providerId", "kind", "remoteId"], unique = true)])
 data class CategoryEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val providerId: Long,
     val kind: String,           // "LIVE", "MOVIE", "SERIES"
     val remoteId: String,
     val name: String,
+    /** Stable zero-based order received from the provider for this category kind. */
+    val providerPosition: Int = 0,
     val locked: Boolean = false,
 )
 

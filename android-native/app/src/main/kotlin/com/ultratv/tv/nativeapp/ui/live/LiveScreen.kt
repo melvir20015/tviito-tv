@@ -42,6 +42,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil.compose.AsyncImage
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
+import com.ultratv.tv.nativeapp.data.prefs.LiveChannelSortMode
 import com.ultratv.tv.nativeapp.ui.common.prettyCategoryName
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.FlowRow
@@ -78,6 +79,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     val selected by vm.selectedCategory.collectAsState()
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
+    val sortMode by vm.sortMode.collectAsState()
     // Channel awaiting PIN unlock; non-null while the dialog is up.
     var pinPrompt by remember { mutableStateOf<com.ultratv.tv.nativeapp.data.db.ChannelEntity?>(null) }
     // Currently focused channel for the preview pane (defaults to the first one).
@@ -105,7 +107,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
             LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 item("__all__") {
                     CategoryRow(
-                        label = "All channels",
+                        label = S.liveAllChannels,
                         selected = selected == CATEGORY_ALL,
                         onClick = { vm.selectCategory(CATEGORY_ALL) },
                     )
@@ -139,24 +141,28 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
         ) {
             val title = if (selected == CATEGORY_ALL) S.liveAllChannels
             else prettyCategoryName(cats.firstOrNull { it.remoteId == selected }?.name ?: "")
-            Row(
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Text(
-                    title.uppercase(),
-                    color = UltraTokens.Fg3,
-                    fontSize = 11.sp,
-                    letterSpacing = 2.3.sp,
-                    fontWeight = FontWeight.Medium,
-                )
-                Text(
-                    S.liveChannelsCountTemplate.format(chans.size),
-                    fontFamily = UltraFonts.Mono,
-                    fontSize = 11.sp,
-                    color = UltraTokens.Fg4,
-                )
+            Column(Modifier.padding(start = 24.dp, end = 24.dp, bottom = 12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        title.uppercase(),
+                        color = UltraTokens.Fg3,
+                        fontSize = 11.sp,
+                        letterSpacing = 2.3.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        S.liveChannelsCountTemplate.format(chans.size),
+                        fontFamily = UltraFonts.Mono,
+                        fontSize = 11.sp,
+                        color = UltraTokens.Fg4,
+                    )
+                }
+                Spacer(Modifier.height(10.dp))
+                SortModeRow(sortMode = sortMode, onSelect = vm::setSortMode)
             }
 
             val listState = rememberLazyListState()
@@ -281,6 +287,42 @@ private fun CategoryRow(label: String, selected: Boolean, onClick: () -> Unit) {
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
+private fun SortModeRow(sortMode: LiveChannelSortMode, onSelect: (LiveChannelSortMode) -> Unit) {
+    val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
+    val options = listOf(
+        LiveChannelSortMode.PROVIDER to S.liveSortProvider,
+        LiveChannelSortMode.ALPHA_ASC to S.liveSortAlphaAsc,
+        LiveChannelSortMode.ALPHA_DESC to S.liveSortAlphaDesc,
+        LiveChannelSortMode.FAVORITES_FIRST to S.liveSortFavorites,
+        LiveChannelSortMode.MANUAL to S.liveSortManual,
+    )
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        options.forEach { (mode, label) ->
+            val selected = mode == sortMode
+            Card(
+                onClick = { onSelect(mode) },
+                shape = CardDefaults.shape(RoundedCornerShape(999.dp)),
+                colors = com.ultratv.tv.nativeapp.ui.theme.ultraCardColors(
+                    containerColor = if (selected) UltraTokens.AccentSoft else UltraTokens.Surface1,
+                    focusedContainerColor = UltraTokens.Accent,
+                    focusedContentColor = Color.White,
+                ),
+            ) {
+                Text(
+                    label,
+                    color = if (selected) UltraTokens.Accent else UltraTokens.Fg3,
+                    fontSize = 10.sp,
+                    fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    maxLines = 1,
+                )
+            }
+        }
+    }
+}
+
+@OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
+@Composable
 private fun ChannelRow(
     channel: ChannelEntity,
     position: Int,
@@ -348,7 +390,7 @@ private fun ChannelRow(
                 }
                 if (nowProgramme != null) {
                     Text(
-                        nowProgramme.title + (nextProgramme?.let { "  ·  puis ${it.title}" } ?: ""),
+                        nowProgramme.title + (nextProgramme?.let { "  ·  ${com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveThen} ${it.title}" } ?: ""),
                         color = UltraTokens.Fg3,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -388,8 +430,10 @@ private fun LivePreviewPane(
     }
     var resolvedUrl by remember { mutableStateOf<String?>(null) }
     var loading by remember(channel.id) { mutableStateOf(true) }
+    var previewError by remember(channel.id) { mutableStateOf(false) }
     LaunchedEffect(channel.id) {
         loading = true
+        previewError = false
         resolvedUrl = null
         // 700 ms debounce: user is scrolling, don't hit the network on each
         // row. resolvePreviewUrl swallows Stalker `create_link` calls when
@@ -397,6 +441,7 @@ private fun LivePreviewPane(
         kotlinx.coroutines.delay(700)
         val url = runCatching { vm.resolvePreviewUrl(channel) }.getOrNull()
         resolvedUrl = url
+        previewError = url == null
         loading = false
         if (url != null) {
             miniPlayer.setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
@@ -449,6 +494,15 @@ private fun LivePreviewPane(
                         showBadge = false,
                     )
                 }
+            }
+
+            if (loading || previewError) {
+                Text(
+                    if (loading) com.ultratv.tv.nativeapp.i18n.LocalStrings.current.livePreviewLoading else com.ultratv.tv.nativeapp.i18n.LocalStrings.current.livePreviewError,
+                    color = Color.White.copy(alpha = 0.82f),
+                    fontSize = 13.sp,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp),
+                )
             }
 
             // Top overlay: LIVE chip + category badge
@@ -526,9 +580,9 @@ private fun LivePreviewPane(
             verticalArrangement = Arrangement.spacedBy(6.dp),
             maxItemsInEachRow = 4,
         ) {
-            Hint("OK", "Lecture")
+            Hint("OK", com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveWatchChannel)
             Hint("▲▼", "Zap")
-            Hint("★", "Fav.")
+            Hint("★", com.ultratv.tv.nativeapp.i18n.LocalStrings.current.favorites)
         }
     }
 }
@@ -864,7 +918,7 @@ private fun LiveChip() {
                 .background(UltraTokens.Live)
         )
         Spacer(Modifier.width(8.dp))
-        Text("EN DIRECT", color = Color(0xFFFFB5AF), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.7.sp)
+        Text(com.ultratv.tv.nativeapp.i18n.LocalStrings.current.liveOnAirPill, color = Color(0xFFFFB5AF), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.7.sp)
     }
 }
 

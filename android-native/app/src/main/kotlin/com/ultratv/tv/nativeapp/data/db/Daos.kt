@@ -36,11 +36,13 @@ interface ProviderDao {
 
 @Dao
 interface ChannelDao {
-    // userPosition first (0 = unset, sorted last via CASE), then alpha by name.
+    // Manual/pinned rows first, then the provider's original order. Alphabetical
+    // fallback keeps migrated/legacy rows deterministic when providerPosition ties.
     @Query("""
         SELECT * FROM channel WHERE providerId = :pid
         ORDER BY CASE WHEN userPosition = 0 THEN 1 ELSE 0 END,
                  userPosition,
+                 providerPosition,
                  name COLLATE NOCASE ASC
     """)
     fun observeForProvider(pid: Long): Flow<List<ChannelEntity>>
@@ -49,6 +51,7 @@ interface ChannelDao {
         SELECT * FROM channel WHERE providerId = :pid AND categoryId = :cat
         ORDER BY CASE WHEN userPosition = 0 THEN 1 ELSE 0 END,
                  userPosition,
+                 providerPosition,
                  name COLLATE NOCASE ASC
     """)
     fun observeForCategory(pid: Long, cat: String): Flow<List<ChannelEntity>>
@@ -152,7 +155,7 @@ interface EpisodeDao {
 
 @Dao
 interface CategoryDao {
-    @Query("SELECT * FROM category WHERE providerId = :pid AND kind = :kind ORDER BY name")
+    @Query("SELECT * FROM category WHERE providerId = :pid AND kind = :kind ORDER BY providerPosition, name COLLATE NOCASE ASC")
     fun observeForProviderKind(pid: Long, kind: String): Flow<List<CategoryEntity>>
 
     @Query("UPDATE category SET locked = :locked WHERE id = :id")

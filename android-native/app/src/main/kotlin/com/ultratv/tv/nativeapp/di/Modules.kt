@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.ultratv.tv.nativeapp.data.db.CategoryDao
 import com.ultratv.tv.nativeapp.data.db.ChannelDao
 import com.ultratv.tv.nativeapp.data.db.ProviderDao
+import com.ultratv.tv.nativeapp.data.db.MIGRATION_10_11
 import com.ultratv.tv.nativeapp.data.db.UltraDb
 import dagger.Module
 import dagger.Provides
@@ -29,6 +30,7 @@ object DatabaseModule {
             // widen this destructive range — the exported schemas under
             // app/schemas let Room auto-generate / verify those migrations.
             .fallbackToDestructiveMigrationFrom(1, 2, 3, 4, 5, 6, 7, 8, 9)
+            .addMigrations(MIGRATION_10_11)
             .build()
 
     @Provides fun provideProviderDao(db: UltraDb): ProviderDao = db.providerDao()

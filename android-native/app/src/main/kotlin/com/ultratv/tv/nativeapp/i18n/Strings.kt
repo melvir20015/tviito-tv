@@ -210,6 +210,15 @@ enum class StringKey(val defaultValue: String) {
     LiveThen("then"),
     LiveDayScheduleEyebrow("TODAY'S SCHEDULE"),
     LiveNoEpgForChannel("No EPG available for this channel."),
+    LiveSort("Sort"),
+    LiveSortProvider("Provider order"),
+    LiveSortAlphaAsc("A-Z"),
+    LiveSortAlphaDesc("Z-A"),
+    LiveSortFavorites("Favorites first"),
+    LiveSortManual("Manual"),
+    LivePreviewLoading("Loading preview…"),
+    LivePreviewError("Preview unavailable"),
+    LiveWatchChannel("Watch channel"),
     UpdateAvailableEyebrow("UPDATE AVAILABLE"),
     UpdateLater("Later"),
     UpdateInstall("Install now"),
@@ -499,6 +508,15 @@ class Strings(
     val liveThen: String get() = overrides[StringKey.LiveThen] ?: StringKey.LiveThen.defaultValue
     val liveDayScheduleEyebrow: String get() = overrides[StringKey.LiveDayScheduleEyebrow] ?: StringKey.LiveDayScheduleEyebrow.defaultValue
     val liveNoEpgForChannel: String get() = overrides[StringKey.LiveNoEpgForChannel] ?: StringKey.LiveNoEpgForChannel.defaultValue
+    val liveSort: String get() = overrides[StringKey.LiveSort] ?: StringKey.LiveSort.defaultValue
+    val liveSortProvider: String get() = overrides[StringKey.LiveSortProvider] ?: StringKey.LiveSortProvider.defaultValue
+    val liveSortAlphaAsc: String get() = overrides[StringKey.LiveSortAlphaAsc] ?: StringKey.LiveSortAlphaAsc.defaultValue
+    val liveSortAlphaDesc: String get() = overrides[StringKey.LiveSortAlphaDesc] ?: StringKey.LiveSortAlphaDesc.defaultValue
+    val liveSortFavorites: String get() = overrides[StringKey.LiveSortFavorites] ?: StringKey.LiveSortFavorites.defaultValue
+    val liveSortManual: String get() = overrides[StringKey.LiveSortManual] ?: StringKey.LiveSortManual.defaultValue
+    val livePreviewLoading: String get() = overrides[StringKey.LivePreviewLoading] ?: StringKey.LivePreviewLoading.defaultValue
+    val livePreviewError: String get() = overrides[StringKey.LivePreviewError] ?: StringKey.LivePreviewError.defaultValue
+    val liveWatchChannel: String get() = overrides[StringKey.LiveWatchChannel] ?: StringKey.LiveWatchChannel.defaultValue
     val updateAvailableEyebrow: String get() = overrides[StringKey.UpdateAvailableEyebrow] ?: StringKey.UpdateAvailableEyebrow.defaultValue
     val updateLater: String get() = overrides[StringKey.UpdateLater] ?: StringKey.UpdateLater.defaultValue
     val updateInstall: String get() = overrides[StringKey.UpdateInstall] ?: StringKey.UpdateInstall.defaultValue
@@ -797,6 +815,15 @@ private val ES: Strings by lazy {
         put(StringKey.LiveThen, "después")
         put(StringKey.LiveDayScheduleEyebrow, "PROGRAMA DEL DÍA")
         put(StringKey.LiveNoEpgForChannel, "EPG no disponible para este canal.")
+        put(StringKey.LiveSort, "Ordenar")
+        put(StringKey.LiveSortProvider, "Orden del proveedor")
+        put(StringKey.LiveSortAlphaAsc, "A-Z")
+        put(StringKey.LiveSortAlphaDesc, "Z-A")
+        put(StringKey.LiveSortFavorites, "Favoritos primero")
+        put(StringKey.LiveSortManual, "Manual")
+        put(StringKey.LivePreviewLoading, "Cargando previsualización…")
+        put(StringKey.LivePreviewError, "Previsualización no disponible")
+        put(StringKey.LiveWatchChannel, "Ver canal")
         put(StringKey.UpdateAvailableEyebrow, "ACTUALIZACIÓN DISPONIBLE")
         put(StringKey.UpdateLater, "Más tarde")
         put(StringKey.UpdateInstall, "Instalar")

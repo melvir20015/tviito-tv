@@ -41,6 +41,7 @@ class M3uParser @Inject constructor(private val ok: OkHttpClient) {
 
         var i = 0
         var seq = 0
+        var categorySeq = 0
         while (i < lines.size) {
             val line = lines[i]
             if (line.startsWith("#EXTINF")) {
@@ -58,7 +59,7 @@ class M3uParser @Inject constructor(private val ok: OkHttpClient) {
                     if (group != null && group !in groupsSeen) {
                         groupsSeen[group] = CategoryEntity(
                             providerId = providerId, kind = "LIVE",
-                            remoteId = "g:$group", name = group,
+                            remoteId = "g:$group", name = group, providerPosition = categorySeq++,
                         )
                     }
                     val tvgId = attrs["tvg-id"]?.takeIf { it.isNotBlank() }
@@ -77,6 +78,7 @@ class M3uParser @Inject constructor(private val ok: OkHttpClient) {
                         epgChannelId = tvgId,
                         catchupSource = catchupSrc,
                         catchupDays = catchupDays,
+                        providerPosition = channels.size,
                     )
                     i = j + 1
                     continue
