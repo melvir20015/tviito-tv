@@ -366,17 +366,16 @@ fun SettingsScreen(
 
         // ---- 4c. Local channel logos ----
         SectionCard {
-            Text("Logos chaînes locaux", color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text(S.settingsLocalLogosTitle, color = MaterialTheme.colorScheme.onBackground, fontSize = 18.sp, fontWeight = FontWeight.Bold)
             Text(
-                "Choisis un dossier (USB / interne) avec des PNG nommés d'après le tvg-id ou le nom de chaîne. " +
-                    "Les fichiers du dossier remplacent les logos du provider à l'affichage.",
+                S.settingsLocalLogosHint,
                 color = T.Fg3,
                 fontSize = 12.sp,
             )
             val currentUri by vm.localLogosFolderUri.collectAsState()
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button(onClick = { pickLogosFolder.launch(null) }) {
-                    Text(if (currentUri.isBlank()) "Choisir un dossier" else "Changer le dossier", fontSize = 14.sp)
+                    Text(if (currentUri.isBlank()) S.settingsChooseFolder else S.settingsChangeFolder, fontSize = 14.sp)
                 }
                 if (currentUri.isNotBlank()) {
                     Text(

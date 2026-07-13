@@ -152,7 +152,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
                     fontWeight = FontWeight.Medium,
                 )
                 Text(
-                    "${chans.size} chaînes",
+                    S.liveChannelsCountTemplate.format(chans.size),
                     fontFamily = UltraFonts.Mono,
                     fontSize = 11.sp,
                     color = UltraTokens.Fg4,

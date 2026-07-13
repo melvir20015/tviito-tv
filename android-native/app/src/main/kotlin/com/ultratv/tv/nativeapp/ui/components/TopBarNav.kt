@@ -163,7 +163,7 @@ fun UtilityCluster(
             UltraIcon(UltraIcon.Search, size = 16.dp, color = if (searchActive) UltraTokens.Fg else UltraTokens.Fg2)
             Spacer(Modifier.width(10.dp))
             Text(
-                "Films, séries, chaînes…",
+                strings.searchPlaceholder,
                 color = UltraTokens.Fg4,
                 fontSize = 13.sp,
                 modifier = Modifier.weight(1f),
