@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
@@ -53,6 +55,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.ultratv.tv.nativeapp.ui.common.ChannelLogo
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
@@ -219,14 +222,20 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
     BackHandler { onBack() }
     val playbackItem by vm.current.collectAsState()
     val isLive = playbackItem?.kind == "LIVE"
+    val liveQueue by vm.queue.collectAsState()
+    val currentLiveEntry = liveQueue.firstOrNull { it.isCurrent }
     var currentUrl by remember { mutableStateOf(url) }
     var currentTitle by remember { mutableStateOf(title) }
     var tracksOpen by remember { mutableStateOf(false) }
     var drawerOpen by remember { mutableStateOf(false) }
+    var showLiveInfoBar by remember { mutableStateOf(isLive) }
     var displayMenu by remember { mutableStateOf(false) }
     var aspectMode by remember { mutableStateOf(AspectMode.Fit) }
     var playbackSpeed by remember { mutableStateOf(1.0f) }
     val S = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
+    BackHandler(enabled = isLive && showLiveInfoBar && !drawerOpen && !tracksOpen && !displayMenu) {
+        showLiveInfoBar = false
+    }
 
     // Load prefs off the main thread. runBlocking here blocked the main thread
     // on a DataStore read during composition (ANR risk). produceState starts
@@ -242,6 +251,13 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
     val playbackPrefs = loadedPrefs ?: run {
         Box(Modifier.fillMaxSize().background(Color.Black))
         return
+    }
+
+    LaunchedEffect(showLiveInfoBar, currentTitle, drawerOpen, displayMenu, tracksOpen) {
+        if (isLive && showLiveInfoBar && !drawerOpen && !displayMenu && !tracksOpen) {
+            delay(5_000)
+            showLiveInfoBar = false
+        }
     }
 
     val player = remember {
@@ -431,6 +447,7 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
                 if (!isLive || ev.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (ev.key) {
                     Key.DirectionUp -> {
+                        showLiveInfoBar = true
                         scope.launch {
                             vm.zap(forward = false)?.let {
                                 currentUrl = it
@@ -440,6 +457,7 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
                         true
                     }
                     Key.DirectionDown -> {
+                        showLiveInfoBar = true
                         scope.launch {
                             vm.zap(forward = true)?.let {
                                 currentUrl = it
@@ -449,7 +467,11 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
                         true
                     }
                     Key.Enter, Key.DirectionCenter -> {
-                        drawerOpen = !drawerOpen
+                        if (showLiveInfoBar) {
+                            drawerOpen = !drawerOpen
+                        } else {
+                            showLiveInfoBar = true
+                        }
                         true
                     }
                     else -> false
@@ -548,17 +570,20 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
             }
         }
 
-        Row(Modifier.align(Alignment.TopStart).padding(24.dp)) {
-            Column {
-                Text(currentTitle, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-                if (isLive) {
-                    Text(
-                        "▲ ▼ to zap channels",
-                        color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp,
-                    )
+        if (!isLive) {
+            Row(Modifier.align(Alignment.TopStart).padding(24.dp)) {
+                Column {
+                    Text(currentTitle, color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                    Text(currentUrl.substringBefore('?').takeLast(60), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
                 }
-                Text(currentUrl.substringBefore('?').takeLast(60), color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
             }
+        }
+        if (isLive && showLiveInfoBar) {
+            LiveInfoBar(
+                title = currentTitle,
+                entry = currentLiveEntry,
+                modifier = Modifier.align(Alignment.BottomStart),
+            )
         }
         FlowRow(
             modifier = Modifier
@@ -733,6 +758,106 @@ fun PlayerScreen(url: String, title: String, onBack: () -> Unit, vm: PlayerViewM
         }
     }
 }
+
+@Composable
+private fun LiveInfoBar(
+    title: String,
+    entry: PlayerViewModel.DrawerEntry?,
+    modifier: Modifier = Modifier,
+) {
+    val t = com.ultratv.tv.nativeapp.ui.theme.UltraTokens
+    val now = entry?.now
+    val next = entry?.next
+    val channel = entry?.channel
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(230.dp)
+            .background(Color(0x22000000)),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .background(Color(0xEE08090B))
+                .border(1.dp, Color(0x553A4050))
+                .padding(horizontal = 34.dp, vertical = 24.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (channel != null) {
+                ChannelLogo(
+                    name = channel.name,
+                    logoUrl = channel.logo,
+                    short = null,
+                    hueSeed = channel.name.hashCode(),
+                    hd = null,
+                    size = 72.dp,
+                    showBadge = false,
+                )
+            } else {
+                Box(Modifier.size(72.dp).background(Color(0xFF14161A), RoundedCornerShape(8.dp)))
+            }
+            Spacer(Modifier.width(22.dp))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        channel?.name ?: title,
+                        color = Color(0xFFF4F5F7),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Box(
+                        Modifier
+                            .clip(RoundedCornerShape(99.dp))
+                            .background(t.Live.copy(alpha = 0.20f))
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                    ) {
+                        Text("EN VIVO", color = t.Live, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    now?.title ?: "Sin información de programa actual",
+                    color = Color(0xFFF4F5F7),
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                )
+                Spacer(Modifier.height(10.dp))
+                LiveProgramProgress(now)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    next?.let { "Luego: ${it.title}" } ?: "OK abre canales recientes · ▲/▼ cambia de canal · Back oculta controles",
+                    color = Color(0xFFAEB3BC),
+                    fontSize = 15.sp,
+                    maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(20.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(formatClock(System.currentTimeMillis()), color = Color(0xFFF4F5F7), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(10.dp))
+                Text(now?.let { "${formatClock(it.startMs)} - ${formatClock(it.endMs)}" } ?: "Horario no disponible", color = Color(0xFFAEB3BC), fontSize = 14.sp)
+                Spacer(Modifier.height(10.dp))
+                Text("OK: lista rápida", color = Color(0xFF6F747C), fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun LiveProgramProgress(now: com.ultratv.tv.nativeapp.data.db.EpgEntity?) {
+    val progress = now?.let {
+        ((System.currentTimeMillis() - it.startMs).toFloat() / (it.endMs - it.startMs).coerceAtLeast(1)).coerceIn(0f, 1f)
+    } ?: 0f
+    Box(Modifier.fillMaxWidth().height(5.dp).background(Color(0xFF22252B), RoundedCornerShape(99.dp))) {
+        Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(Color(0xFF4EA1FF), RoundedCornerShape(99.dp)))
+    }
+}
+
+private fun formatClock(ms: Long): String = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault()).format(java.util.Date(ms))
 
 /** Subtitle + audio track picker for VOD playback. Reads the current Tracks
  *  object from the player and writes back a TrackSelectionOverride when the
