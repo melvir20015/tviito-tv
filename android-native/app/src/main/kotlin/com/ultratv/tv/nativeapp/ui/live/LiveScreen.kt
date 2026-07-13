@@ -32,6 +32,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.ultratv.tv.nativeapp.data.db.ChannelEntity
 import com.ultratv.tv.nativeapp.data.db.EpgEntity
@@ -90,7 +91,7 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
     }
 
     Row(
-        Modifier.fillMaxSize().background(UltraTokens.Bg).padding(horizontal = UltraTokens.EdgeGutter, vertical = 28.dp)
+        Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = UltraTokens.EdgeGutter, vertical = 28.dp)
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (event.key) {
@@ -103,16 +104,23 @@ fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel =
             },
         horizontalArrangement = Arrangement.spacedBy(18.dp),
     ) {
-        CategoryPanel(categories, selected, activePanel == LivePanel.CATEGORY, catRequester) { id ->
+        CategoryPanel(
+            categories, selected, activePanel == LivePanel.CATEGORY, catRequester,
+            modifier = Modifier.weight(0.22f).fillMaxHeight(),
+        ) { id ->
             vm.selectCategory(id); focusedChannelId = focus.selectCategory(id, channels.firstOrNull()?.id); activePanel = LivePanel.CHANNELS
         }
         ChannelListPanel(
             channels, focusedChannelId, selected, activePanel == LivePanel.CHANNELS, chanRequester, channelListState, nowNext, locked, showNumbers,
+            modifier = Modifier.weight(0.34f).fillMaxHeight(),
             onFocus = { ch -> focusedChannelId = ch.id; focus.rememberChannel(selected, ch.id) },
             onPlay = { ch -> if (lockedKey(ch) in locked) contextChannel = ch else vm.resolveAndPlay(ch, onPlay) },
             onLongPress = { ch -> contextChannel = ch },
         )
-        LivePreviewPanel(activeChannel, nowNext[activeChannel?.id], lockedKey(activeChannel) in locked, activePanel == LivePanel.PREVIEW, previewRequester, vm) {
+        LivePreviewPanel(
+            activeChannel, nowNext[activeChannel?.id], lockedKey(activeChannel) in locked, activePanel == LivePanel.PREVIEW, previewRequester, vm,
+            modifier = Modifier.weight(0.44f).fillMaxHeight(),
+        ) {
             activeChannel?.let { if (lockedKey(it) !in locked) vm.resolveAndPlay(it, onPlay) }
         }
     }
@@ -130,8 +138,8 @@ private fun stepChannel(list: List<ChannelEntity>, current: Long?, delta: Int): 
 private fun lockedKey(ch: ChannelEntity?) = ch?.let { "${it.providerId}:${it.remoteId}" } ?: ""
 
 @Composable
-private fun CategoryPanel(items: List<LiveCategoryUi>, selected: String, focused: Boolean, requester: FocusRequester, onSelect: (String) -> Unit) {
-    Column(Modifier.width(220.dp).fillMaxHeight().focusRequester(requester), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun CategoryPanel(items: List<LiveCategoryUi>, selected: String, focused: Boolean, requester: FocusRequester, modifier: Modifier = Modifier, onSelect: (String) -> Unit) {
+    Column(modifier.focusRequester(requester), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("TV EN VIVO", color = UltraTokens.Fg, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
         Text("CATEGORÍAS", color = UltraTokens.Fg3, fontSize = 11.sp, letterSpacing = 2.sp)
         LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -150,8 +158,8 @@ private fun CategoryPanel(items: List<LiveCategoryUi>, selected: String, focused
 }
 
 @Composable
-private fun ChannelListPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryId: String, panelFocused: Boolean, requester: FocusRequester, state: androidx.compose.foundation.lazy.LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onLongPress: (ChannelEntity) -> Unit) {
-    Column(Modifier.width(500.dp).fillMaxHeight().focusRequester(requester)) {
+private fun ChannelListPanel(channels: List<ChannelEntity>, focusedId: Long?, categoryId: String, panelFocused: Boolean, requester: FocusRequester, state: androidx.compose.foundation.lazy.LazyListState, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, locked: Set<String>, showNumbers: Boolean, modifier: Modifier = Modifier, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onLongPress: (ChannelEntity) -> Unit) {
+    Column(modifier.focusRequester(requester)) {
         Text("Canales", color = UltraTokens.Fg, fontFamily = UltraFonts.Serif, fontSize = 28.sp)
         Spacer(Modifier.height(10.dp))
         if (channels.isEmpty()) Box(Modifier.fillMaxSize().background(UltraTokens.Surface1, RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Text(if (categoryId == CATEGORY_RECENTS || categoryId == CATEGORY_HISTORY) "Aún no hay canales vistos en esta categoría." else "No hay canales disponibles.", color = UltraTokens.Fg3) }
@@ -183,7 +191,7 @@ private fun ChannelRow(ch: ChannelEntity, number: Int, focused: Boolean, locked:
 private fun Modifier.onFocusEventCompat(block: () -> Unit) = this.then(Modifier.onFocusChanged { if (it.isFocused) block() })
 
 @Composable
-private fun LivePreviewPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, focused: Boolean, requester: FocusRequester, vm: LiveViewModel, onPlay: () -> Unit) {
+private fun LivePreviewPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntity?>?, locked: Boolean, focused: Boolean, requester: FocusRequester, vm: LiveViewModel, modifier: Modifier = Modifier, onPlay: () -> Unit) {
     val context = LocalContext.current
     var state by remember { mutableStateOf(if (locked) PreviewState.Locked else PreviewState.Idle) }
     val debouncer = remember { PreviewDebouncer() }
@@ -197,7 +205,7 @@ private fun LivePreviewPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgE
         state = PreviewState.Loading
         runCatching { vm.resolvePreviewUrl(channel) }.onSuccess { url -> player.setMediaItem(MediaItem.fromUri(url)); player.prepare(); debouncer.activate(channel.id) }.onFailure { state = PreviewState.Error }
     }
-    Column(Modifier.weight(1f).fillMaxHeight().focusRequester(requester)) {
+    Column(modifier.focusRequester(requester)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16 / 9f).clip(RoundedCornerShape(22.dp)).background(Color.Black).border(if (focused) 2.dp else 1.dp, if (focused) UltraTokens.Accent else UltraTokens.Line2, RoundedCornerShape(22.dp)), contentAlignment = Alignment.Center) {
             AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
             if (state != PreviewState.Ready) Text(previewText(state), color = UltraTokens.Fg, fontSize = 16.sp, fontWeight = FontWeight.Medium)
