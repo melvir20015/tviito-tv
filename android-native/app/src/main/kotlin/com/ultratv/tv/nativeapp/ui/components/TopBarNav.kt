@@ -144,6 +144,8 @@ fun UtilityCluster(
     onSearchClick: () -> Unit,
     searchActive: Boolean,
 ) {
+    val strings = LocalStrings.current
+
     Row(verticalAlignment = Alignment.CenterVertically) {
         // Search pill — visible everywhere
         Row(
