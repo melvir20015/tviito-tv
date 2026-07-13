@@ -1,1094 +1,794 @@
-# Módulo de TV en Vivo
+# Prompt para reproducir fielmente el módulo de TV en vivo de la referencia
 
-## 1. Objetivo general
+Quiero rehacer completamente el módulo de TV en vivo actual.
 
-Implementar en la aplicación Android TV una experiencia completa de reproducción y navegación de TV en vivo basada en una interfaz moderna, rápida, oscura, limpia y controlada principalmente con el D-pad del control remoto.
+El resultado existente no cumple con la referencia visual ni con el comportamiento esperado. No quiero una reinterpretación, una variante creativa, una aproximación general ni un diseño inspirado libremente.
 
-La idea central del módulo es la siguiente:
+Quiero reproducir con máxima fidelidad los comportamientos observables, la estructura visual, el flujo de navegación, la disposición de elementos, el manejo del foco, las transiciones y las funciones que aparecen en el siguiente material de referencia:
 
-> El canal en reproducción debe permanecer activo como fondo mientras el usuario abre listas, guía, información, categorías y menús.
+**Video de referencia:**
+`https://youtu.be/cY3k7Z-mrGU?si=me0TW1hErBF-YNNf`
 
-No se debe reemplazar abruptamente el reproductor por pantallas completamente separadas. La mayoría de las funciones deben aparecer como capas superpuestas animadas sobre el video en vivo.
+A partir de ahora, denomina este producto únicamente como:
 
-El módulo debe incluir:
+**“la aplicación de referencia”**
 
-- Reproducción a pantalla completa.
-- Barra de información del canal y programa.
-- Lista rápida de canales.
-- Canales recientes.
-- Guía electrónica de programación.
-- Navegación por categorías o grupos.
-- Información del programa actual y siguiente.
-- Menús contextuales.
-- Favoritos.
-- Historial o canales vistos recientemente.
-- Funciones de Catch-up cuando estén disponibles.
-- Indicadores de progreso de los programas.
-- Navegación completamente optimizada para control remoto.
-- Transiciones rápidas, suaves y consistentes.
-- Persistencia del canal que se está reproduciendo mientras se navega.
+No menciones marcas comerciales dentro del código, documentación, nombres de clases, comentarios, recursos, pruebas ni interfaz.
 
-La interfaz debe priorizar la televisión. El contenido en reproducción es siempre el elemento principal y los controles deben desaparecer automáticamente cuando el usuario deja de interactuar.
+No utilices código, recursos gráficos, logotipos, iconos, tipografías propietarias ni archivos extraídos de terceros. La implementación debe ser propia, pero debe reproducir fielmente la experiencia observable descrita y mostrada en el video.
 
 ---
 
-## 2. Plataforma y orientación
+# 1. Regla principal
 
-Implementar para:
+No rediseñar.
 
-- Android TV.
-- Google TV.
-- Fire TV cuando la arquitectura lo permita.
-- Orientación exclusivamente horizontal.
-- Resoluciones principales:
-  - 1280 × 720.
-  - 1920 × 1080.
-  - 3840 × 2160.
-- Escalado proporcional mediante `dp`, `sp` y márgenes seguros.
+No modernizar.
 
-Toda la interfaz debe poder controlarse sin pantalla táctil mediante:
+No simplificar.
 
-- D-pad arriba.
-- D-pad abajo.
-- D-pad izquierda.
-- D-pad derecha.
-- Botón OK o Enter.
-- Botón Back.
-- Pulsación larga de OK.
-- Botones multimedia cuando estén disponibles.
+No sustituir los flujos por componentes genéricos.
 
----
+No cambiar la posición de paneles.
 
-## 3. Lenguaje visual general
+No convertir la interfaz en una aplicación móvil ampliada.
 
-Utilizar una estética oscura y minimalista.
+No inventar nuevas interacciones.
 
-### 3.1 Fondo
+No aplicar patrones de navegación que no aparezcan en la referencia.
 
-El reproductor de video debe ocupar siempre el 100 % de la pantalla.
+No entregar una aproximación visual.
 
-Cuando aparezca una capa:
+El objetivo es reproducir fielmente:
 
-- Mantener el video visible.
-- Aplicar una capa oscura semitransparente únicamente donde sea necesario.
-- No desenfocar excesivamente el video.
-- El contenido debe continuar reproduciéndose sin pausas.
-- Evitar fondos sólidos que oculten por completo el canal, excepto en ajustes o pantallas donde sea obligatorio.
+* La composición de pantalla.
+* El orden de las capas.
+* El comportamiento del reproductor.
+* La posición relativa de cada panel.
+* El flujo entre reproducción, información, canales, categorías y guía.
+* La navegación con control remoto.
+* La restauración del foco.
+* La velocidad de las transiciones.
+* La persistencia del video detrás de los menús.
+* Los estados visibles del canal activo, fila enfocada y categoría seleccionada.
+* El comportamiento del botón Back.
+* La respuesta a pulsación corta y pulsación larga de OK.
 
-### 3.2 Colores
-
-Usar como base:
-
-- Negro profundo para fondos: `#08090B`.
-- Gris muy oscuro para paneles: `#14161A`.
-- Gris secundario: `#22252B`.
-- Blanco para texto principal: `#F4F5F7`.
-- Gris claro para texto secundario: `#AEB3BC`.
-- Gris tenue para información deshabilitada: `#6F747C`.
-- Color de enfoque principal configurable, con un azul frío como valor inicial.
-- Rojo únicamente para grabación, errores o acciones destructivas.
-- Verde únicamente para estados correctos o reproducción activa cuando sea necesario.
-
-Los paneles superpuestos deben usar entre 88 % y 96 % de opacidad.
-
-### 3.3 Tipografía
-
-Utilizar una tipografía sans-serif clara y legible a distancia.
-
-Jerarquía recomendada para 1080p:
-
-- Título de programa: 24–28 sp.
-- Nombre del canal: 20–24 sp.
-- Texto principal de listas: 18–22 sp.
-- Horarios: 15–18 sp.
-- Descripciones: 16–18 sp.
-- Información secundaria: 14–16 sp.
-
-No utilizar textos demasiado pequeños.
-
-### 3.4 Bordes y formas
-
-- Esquinas ligeramente redondeadas.
-- Radio aproximado: 4–8 dp.
-- Sombras discretas.
-- No abusar de tarjetas individuales.
-- Las filas deben sentirse como parte de una lista continua.
-- El foco debe ser evidente mediante:
-  - Fondo iluminado.
-  - Cambio de contraste.
-  - Escala mínima.
-  - Borde o indicador lateral.
-- No depender únicamente del color.
+Cuando exista una diferencia entre una decisión convencional de Android TV y lo observado en la referencia, priorizar lo observado en la referencia.
 
 ---
 
-## 4. Jerarquía visual y capas
-
-Organizar las capas en el siguiente orden:
-
-1. Reproductor de video.
-2. Scrim o sombreado contextual.
-3. Barra de información del programa.
-4. Lista rápida o guía.
-5. Panel de categorías.
-6. Menú contextual.
-7. Diálogos de confirmación.
-8. Mensajes temporales y errores.
-
-Cada capa debe cerrarse en orden inverso al presionar Back.
-
-Ejemplo:
-
-- Si el menú contextual está abierto, Back cierra solo el menú contextual.
-- Otro Back cierra la guía o lista.
-- Otro Back vuelve a reproducción limpia.
-- No salir de la aplicación accidentalmente desde una capa interna.
-
----
-
-## 5. Estado principal: reproducción a pantalla completa
-
-Al abrir TV en vivo:
-
-- Restaurar el último canal reproducido.
-- Mostrar inmediatamente el reproductor.
-- No mostrar menús permanentes.
-- Mantener una pantalla limpia.
-- Ocultar cualquier barra del sistema.
-- Usar modo inmersivo.
-- Mantener el aspecto original del video.
-- Permitir configurar:
-  - Ajustar.
-  - Rellenar.
-  - Estirar.
-  - Zoom.
-  - Original.
-
-Después de cargar el canal:
-
-- Mostrar brevemente la barra de información.
-- Ocultarla automáticamente después de aproximadamente 4–6 segundos.
-- Mantener únicamente el video.
-
-Cuando el usuario cambia de canal:
-
-- Cambiar el stream sin abandonar el reproductor.
-- Mostrar la información del nuevo canal.
-- Mostrar un indicador de carga discreto si el stream tarda.
-- No usar una pantalla negra completa salvo que no exista ningún frame disponible.
-- Conservar el último frame válido cuando técnicamente sea posible.
-
----
-
-## 6. Barra de información del canal
-
-Al presionar OK durante la reproducción, mostrar una barra informativa grande en la parte inferior.
-
-Debe incluir:
-
-- Logotipo del canal.
-- Número del canal.
-- Nombre del canal.
-- Nombre del programa actual.
-- Hora de inicio.
-- Hora de finalización.
-- Tiempo actual.
-- Barra de progreso del programa.
-- Porcentaje o progreso visual.
-- Nombre del siguiente programa.
-- Horario del siguiente programa.
-- Indicadores opcionales:
-  - Favorito.
-  - Grabación.
-  - Catch-up.
-  - Subtítulos.
-  - Resolución.
-  - Calidad del stream.
-  - Audio alternativo.
-  - Bloqueo parental.
-
-### 6.1 Diseño de la barra
-
-- Debe entrar desde la parte inferior.
-- Ocupar aproximadamente entre 25 % y 34 % de la altura.
-- Fondo oscuro semitransparente.
-- Gradiente superior para integrarse con el video.
-- Logotipo a la izquierda.
-- Información principal en el centro.
-- Hora y estados a la derecha.
-- Barra de progreso fina pero visible.
-- El título actual debe tener mayor peso visual que el resto.
-
-### 6.2 Comportamiento
-
-- OK abre la barra.
-- Otro OK puede abrir la fila de canales recientes o ejecutar la acción configurada.
-- Back cierra la barra.
-- La barra se cierra automáticamente por inactividad.
-- Cualquier movimiento del D-pad reinicia el temporizador de ocultamiento.
-
----
-
-## 7. Fila de canales recientes
-
-Desde la reproducción o desde la barra de información, mostrar una fila horizontal de canales vistos recientemente.
-
-Debe aparecer sobre la zona inferior del video.
-
-Cada elemento debe contener:
-
-- Logotipo del canal.
-- Nombre corto.
-- Indicador de canal actualmente activo.
-- Programa actual opcional.
-- Barra de progreso opcional.
-
-### 7.1 Diseño
-
-- Tarjetas horizontales compactas.
-- Entre 5 y 8 elementos visibles en 1080p.
-- La tarjeta enfocada debe:
-  - Aumentar ligeramente de tamaño.
-  - Elevarse visualmente.
-  - Cambiar el fondo.
-  - Mostrar texto adicional.
-- Las tarjetas no enfocadas deben permanecer visibles pero con menor contraste.
-
-### 7.2 Navegación
-
-- Izquierda y derecha recorren canales recientes.
-- OK reproduce el canal seleccionado.
-- Arriba puede abrir acciones relacionadas.
-- Abajo puede regresar a la barra de información.
-- Back vuelve al video.
-
-Al seleccionar otro canal:
-
-- Cerrar la fila.
-- Cambiar el stream.
-- Mostrar la barra informativa del nuevo canal.
-- No cambiar de pantalla ni reiniciar toda la actividad.
-
----
-
-## 8. Lista rápida de canales
-
-Implementar una lista vertical superpuesta para navegar canales sin abrir toda la guía.
-
-### 8.1 Posición
-
-- Panel lateral izquierdo.
-- Aproximadamente 35–45 % del ancho.
-- El resto de la pantalla conserva el video visible.
-- Agregar un degradado de oscuro a transparente hacia el centro.
-
-### 8.2 Encabezado
-
-Mostrar:
-
-- Nombre de la categoría actual.
-- Nombre de la lista o fuente, si existen varias.
-- Cantidad de canales.
-- Hora actual.
-- Icono para cambiar de categoría.
-
-### 8.3 Filas
-
-Cada canal debe mostrar:
-
-- Número.
-- Logotipo.
-- Nombre.
-- Programa actual.
-- Horario actual.
-- Progreso del programa.
-- Icono de favorito.
-- Indicador Catch-up.
-- Indicador de reproducción si es el canal activo.
-
-### 8.4 Foco
-
-La fila seleccionada debe:
-
-- Tener un fondo claramente iluminado.
-- Mostrar texto completo.
-- Mostrar el programa siguiente o información adicional.
-- Permanecer centrada verticalmente cuando sea posible.
-- Desplazar la lista de manera suave.
-
-### 8.5 Comportamiento
-
-- Arriba y abajo cambian la selección.
-- OK reproduce el canal seleccionado.
-- Izquierda abre categorías.
-- Derecha puede mostrar más información del programa o cerrar la lista, según el contexto.
-- Pulsación larga de OK abre el menú contextual.
-- Back cierra la lista y regresa al video.
-- Mantener visible cuál canal está reproduciéndose aunque el foco esté en otro.
-
-### 8.6 Vista previa
-
-Mientras el usuario solo navega por la lista:
-
-- No cambiar automáticamente el canal con cada movimiento.
-- Mantener el canal actual reproduciéndose.
-- Cambiar de canal únicamente al presionar OK.
-- Actualizar la sección informativa según la fila enfocada.
-
----
-
-## 9. Panel de categorías o grupos
-
-Al presionar izquierda desde la lista o guía, abrir un panel adicional desde el borde izquierdo.
-
-Debe mostrar categorías como:
-
-- Favoritos.
-- Todos los canales.
-- Canales recientes.
-- Historial.
-- Categorías proporcionadas por la lista.
-- Fuentes o playlists, cuando haya varias.
-- Categorías personalizadas.
-
-### 9.1 Diseño
-
-- Panel vertical más angosto.
-- Fondo casi opaco.
-- Icono y nombre de cada categoría.
-- Contador opcional de canales.
-- Separadores discretos.
-- Categoría activa claramente identificada.
-- Foco independiente del canal seleccionado.
-
-### 9.2 Transición
-
-Al abrirlo:
-
-- El panel de categorías entra desde la izquierda.
-- La lista de canales se desplaza ligeramente hacia la derecha.
-- No debe aparecer abruptamente.
-- El video permanece visible en la zona restante.
-- Duración aproximada: 180–240 ms.
-
-Al cambiar de categoría:
-
-- Actualizar la lista sin pantalla de carga completa.
-- Mantener el foco en una posición lógica.
-- Usar un fundido o reemplazo suave de filas.
-- Mostrar un indicador pequeño únicamente si la carga tarda.
-
-Al cerrar:
-
-- El panel se desliza hacia la izquierda.
-- La lista recupera su posición original.
-
----
-
-## 10. Guía electrónica de programación
-
-Implementar una guía de programación completa en forma de cuadrícula.
-
-Debe conservar el video en reproducción mediante una de estas composiciones:
-
-- Video como fondo parcialmente visible.
-- Ventana de previsualización en la parte superior.
-- Guía ocupando la mayor parte de la pantalla con una capa oscura.
-
-La navegación por programación debe sentirse integrada con la reproducción y no como una sección completamente desconectada.
-
-### 10.1 Estructura
-
-La guía debe contener:
-
-#### Columna fija izquierda
-
-- Número del canal.
-- Logotipo.
-- Nombre.
-- Indicador de favorito.
-- Indicador del canal activo.
-
-#### Encabezado horizontal
-
-- Fecha actual.
-- Día.
-- Franja horaria.
-- Marcas cada 30 minutos.
-- Hora actual.
-- Posibilidad de navegar a días anteriores y siguientes cuando exista información.
-
-#### Cuadrícula de programas
-
-Cada programa debe mostrar:
-
-- Título.
-- Hora de inicio.
-- Hora de finalización.
-- Estado:
-  - En vivo.
-  - Futuro.
-  - Finalizado.
-  - Disponible mediante Catch-up.
-  - Programado para grabar.
-  - Recordatorio configurado.
-
-#### Línea de hora actual
-
-- Dibujar una línea vertical claramente visible.
-- Debe cruzar todas las filas.
-- Actualizarla en tiempo real.
-- El programa actual debe mostrar progreso proporcional.
-
-### 10.2 Dimensiones
-
-Para 1080p:
-
-- Filas de 64–82 dp.
-- Columna de canal de 260–340 dp.
-- Escala horizontal proporcional al tiempo.
-- Los programas cortos deben conservar una anchura mínima que permita enfocarlos.
-- Evitar superposición de textos.
-
-### 10.3 Navegación
-
-- Arriba y abajo cambian de canal.
-- Izquierda y derecha cambian de programa.
-- OK:
-  - Reproduce si el programa está en vivo.
-  - Abre detalles o Catch-up si ya terminó.
-  - Abre opciones si es futuro.
-- Pulsación larga de OK abre acciones contextuales.
-- Back vuelve al nivel anterior.
-- Mantener siempre visible el programa enfocado.
-
-### 10.4 Seguimiento del foco
-
-Cuando el foco se mueve:
-
-- La cuadrícula debe desplazarse suavemente.
-- La columna de canales permanece fija.
-- El encabezado de horarios permanece fijo.
-- La vista debe adelantar o retroceder horizontalmente solo lo necesario.
-- Evitar saltos bruscos.
-- Conservar la posición de tiempo al cambiar verticalmente de canal.
-
----
-
-## 11. Información ampliada del programa
-
-Cuando un programa está enfocado, mostrar una zona de información ampliada.
-
-Puede aparecer:
-
-- En la parte superior.
-- En la parte inferior.
-- En un panel lateral.
-- Integrada dentro de la guía.
-
-Debe contener:
-
-- Título.
-- Canal.
-- Horario.
-- Duración.
-- Descripción.
-- Género.
-- Año.
-- Clasificación.
-- Temporada y episodio cuando existan.
-- Iconos de Catch-up, grabación o recordatorio.
-- Progreso del programa.
-- Imagen de fondo o póster cuando exista, sin desplazar la información esencial.
-
-No mostrar campos vacíos. La distribución debe reorganizarse cuando falten datos.
-
----
-
-## 12. Menú contextual
-
-Al mantener presionado OK sobre un canal o programa, abrir un menú contextual.
-
-### 12.1 Posición
-
-- Panel vertical desde el lado derecho.
-- Video o guía visible detrás.
-- Fondo oscuro casi opaco.
-- Ancho aproximado de 28–36 %.
-
-### 12.2 Acciones posibles
-
-Mostrar solamente acciones válidas para el elemento seleccionado:
-
-- Reproducir.
-- Añadir a favoritos.
-- Quitar de favoritos.
-- Ver desde el inicio.
-- Ver Catch-up.
-- Grabar.
-- Programar grabación.
-- Crear recordatorio.
-- Cancelar recordatorio.
-- Información.
-- Buscar programas relacionados.
-- Ocultar canal.
-- Bloquear canal.
-- Cambiar nombre visible.
-- Asignar información EPG.
-- Abrir opciones del canal.
-- Abrir guía del canal.
-- Ver programas futuros.
-
-### 12.3 Interacción
-
-- Arriba y abajo recorren acciones.
-- OK ejecuta la acción.
-- Back cierra el menú.
-- El foco debe iniciar en la acción más probable.
-- Las acciones destructivas deben requerir confirmación.
-- No cerrar la guía completa al cerrar el menú.
-
-### 12.4 Animación
-
-- Entrada desde la derecha.
-- Duración: 180–240 ms.
-- Fondo general ligeramente oscurecido.
-- Salida hacia la derecha.
-- Sin rebotes exagerados.
-
----
-
-## 13. Cambio de canal directo
-
-Permitir cambiar canales desde reproducción con D-pad arriba y abajo.
-
-### 13.1 Comportamiento sugerido
-
-- Arriba: canal siguiente.
-- Abajo: canal anterior.
-- Mostrar una tarjeta informativa breve.
-- Aplicar un retraso corto para evitar múltiples cargas si el usuario pulsa rápidamente.
-- Si el usuario recorre varios canales rápidamente:
-  - Actualizar la información visual inmediatamente.
-  - Iniciar la reproducción únicamente cuando deje de pulsar durante aproximadamente 250–450 ms.
-- Evitar cargar varios streams distintos durante una navegación rápida.
-
-### 13.2 Transición visual
-
-- No usar animaciones llamativas entre streams.
-- Aplicar un fundido muy breve.
-- Mantener el fondo oscuro solo mientras llega el primer frame.
-- Mostrar spinner después de un pequeño retraso, no instantáneamente.
-- Si el nuevo canal falla, volver al anterior cuando sea apropiado.
-
----
-
-## 14. Favoritos
-
-Permitir marcar o desmarcar canales como favoritos desde:
-
-- Lista rápida.
-- Guía.
-- Menú contextual.
-- Barra de información.
-
-Al cambiar el estado:
-
-- Actualizar el icono inmediatamente.
-- Usar una microanimación de escala o relleno.
-- No mostrar un diálogo modal innecesario.
-- Mostrar un mensaje breve:
-  - “Añadido a favoritos”.
-  - “Eliminado de favoritos”.
-- Mantener la posición del foco.
-
-La categoría Favoritos debe actualizarse en tiempo real.
-
----
-
-## 15. Historial y canales recientes
-
-Guardar localmente:
-
-- Últimos canales reproducidos.
-- Fecha y hora.
-- Duración aproximada de visualización.
-- Último programa visto.
-- Última posición cuando aplique.
-- Origen o playlist.
-- Categoría.
-
-Diferenciar:
-
-- **Recientes:** últimos canales abiertos.
-- **Historial:** registro cronológico más amplio.
-
-Evitar duplicados consecutivos. Si un canal ya existe en recientes, moverlo al inicio.
-
----
-
-## 16. Catch-up
-
-Cuando un programa anterior esté disponible:
-
-- Mostrar un icono claramente reconocible.
-- Permitir seleccionarlo desde la guía.
-- Al presionar OK:
-  - Abrir directamente la reproducción, o
-  - Mostrar opciones si existen varias acciones.
-- Mostrar el programa como contenido reproducible, no deshabilitado.
-- Permitir:
-  - Reproducir.
-  - Pausar.
-  - Adelantar.
-  - Retroceder.
-  - Volver a TV en vivo.
-
-Al regresar a TV en vivo:
-
-- Restaurar el canal correspondiente.
-- Saltar al punto en directo.
-- Mostrar la barra de información.
-
----
-
-## 17. Indicadores de estado
-
-Incluir indicadores discretos para:
-
-- Canal actualmente reproduciéndose.
-- Programa en vivo.
-- Programa futuro.
-- Programa finalizado.
-- Catch-up.
-- Favorito.
-- Grabación activa.
-- Grabación programada.
-- Recordatorio.
-- Canal bloqueado.
-- Error de stream.
-- EPG no disponible.
-- Cargando.
-
-Los indicadores no deben saturar la interfaz. Mostrar primero la información esencial.
-
----
-
-## 18. Transiciones y animaciones
-
-Las transiciones son una parte fundamental del diseño.
-
-Todas deben ser rápidas y consistentes.
-
-### 18.1 Duraciones
-
-Usar aproximadamente:
-
-- Microinteracciones: 90–140 ms.
-- Movimiento de foco: 100–160 ms.
-- Paneles laterales: 180–240 ms.
-- Barra inferior: 180–260 ms.
-- Cambio entre vistas grandes: 220–320 ms.
-- Ocultamiento automático: fundido de 140–220 ms.
-
-### 18.2 Curvas
-
-Usar curvas suaves:
-
-- Entrada rápida y desaceleración al final.
-- Salida ligeramente más rápida.
-- Evitar rebotes.
-- Evitar animaciones elásticas.
-- Evitar movimientos largos.
-
-### 18.3 Barra de información
-
-Al aparecer:
-
-- Deslizar ligeramente desde abajo.
-- Fundir la opacidad de 0 a 1.
-- Aplicar gradiente sobre el video.
-- No mover ni redimensionar el reproductor.
-
-Al desaparecer:
-
-- Fundido primero.
-- Desplazamiento leve hacia abajo.
-- Restaurar video completamente limpio.
-
-### 18.4 Lista lateral
-
-Al aparecer:
-
-- Deslizar desde la izquierda.
-- Incrementar simultáneamente el scrim.
-- Mantener el video sin cambios de tamaño.
-
-### 18.5 Guía
-
-Al cambiar de lista rápida a guía:
-
-- Expandir el área de información.
-- Reemplazar progresivamente filas simples por la cuadrícula.
-- Evitar un corte negro.
-- Mantener continuidad del canal activo y foco.
-
-### 18.6 Menú contextual
-
-- Deslizar desde la derecha.
-- Oscurecer ligeramente el resto.
-- No desplazar la guía completa.
-
-### 18.7 Movimiento de foco
-
-Cada cambio de foco debe usar:
-
-- Cambio de fondo.
-- Ligera escala entre 1.00 y 1.03.
-- Transición de texto secundario.
-- Elevación mínima.
-- Duración rápida.
-
-No aplicar escala excesiva en listas densas.
-
----
-
-## 19. Reglas de enfoque para control remoto
-
-El foco debe ser completamente determinista.
-
-Nunca permitir:
-
-- Foco perdido.
-- Foco invisible.
-- Salto a un elemento inesperado.
-- Selección detrás de un panel.
-- Foco en elementos deshabilitados sin explicación.
-
-### 19.1 Restauración
-
-Al cerrar una capa:
-
-- Restaurar el foco al elemento que la abrió.
-
-Al volver a una categoría:
-
-- Restaurar el último canal seleccionado.
-
-Al abrir la guía:
-
-- Enfocar el programa actual del canal activo.
-
-Al abrir la lista rápida:
-
-- Enfocar el canal actualmente reproducido.
-
-Al abrir recientes:
-
-- Enfocar el canal anterior o el primero de la lista según el contexto.
-
----
-
-## 20. Comportamiento del botón Back
-
-Implementar una jerarquía clara:
-
-1. Cerrar diálogo.
-2. Cerrar menú contextual.
-3. Cerrar panel de categorías.
-4. Cerrar guía o lista.
-5. Cerrar barra de información.
-6. Volver a reproducción limpia.
-7. Solo después considerar salir de TV en vivo o de la aplicación.
-
-Cuando esté reproduciendo a pantalla completa:
-
-- Una pulsación de Back puede abrir la vista anterior configurada o solicitar salida según la navegación general.
-- Evitar salir accidentalmente.
-- Considerar pulsación doble para salir si esa es la convención general del proyecto.
-
----
-
-## 21. Carga, buffering y errores
-
-### 21.1 Carga inicial
-
-- Fondo oscuro.
-- Logotipo del canal cuando exista.
-- Indicador de carga centrado.
-- Nombre del canal.
-- No mostrar mensajes técnicos.
-
-### 21.2 Buffering durante reproducción
-
-- Mostrar spinner pequeño en el centro.
-- Conservar el último frame.
-- No abrir automáticamente menús.
-- Ocultar el spinner al recuperar reproducción.
-
-### 21.3 Error
-
-Mostrar una capa discreta con:
-
-- “No se pudo reproducir el canal”.
-- Acción Reintentar.
-- Acción Canal anterior.
-- Detalle técnico únicamente en modo diagnóstico.
-- Código interno registrable para soporte.
-
-### 21.4 EPG ausente
-
-Mostrar:
-
-- “Sin información”.
-- No dejar espacios rotos.
-- Mantener el canal seleccionable.
-- No inventar horarios.
-
----
-
-## 22. Rendimiento
-
-La experiencia debe sentirse instantánea.
-
-Requisitos:
-
-- Mantener una sola instancia principal del reproductor.
-- No recrear el reproductor al abrir o cerrar overlays.
-- No reiniciar el stream al navegar.
-- Precargar logotipos.
-- Usar caché de imágenes.
-- Paginar o virtualizar listas grandes.
-- Renderizar únicamente filas visibles de la guía.
-- Evitar recomposición completa por cada actualización del reloj.
-- Actualizar la línea de hora actual eficientemente.
-- Mantener animaciones fluidas a 60 fps cuando el dispositivo lo permita.
-- Reducir automáticamente efectos en hardware limitado.
-- Evitar fugas de memoria al cambiar repetidamente de canal.
-
----
-
-## 23. Persistencia
-
-Guardar:
-
-- Último canal.
-- Última categoría.
-- Última fuente o playlist.
-- Última vista utilizada.
-- Canales favoritos.
-- Historial.
-- Canales recientes.
-- Configuración de relación de aspecto.
-- Preferencia de subtítulos.
-- Pista de audio seleccionada.
-- Orden de categorías.
-- Posición de navegación cuando sea apropiado.
-
-Después de reiniciar la aplicación:
-
-- Restaurar la experiencia de manera coherente.
-- No restaurar menús contextuales abiertos.
-- Sí restaurar el último canal y categoría.
-- Permitir configurar si la reproducción comienza automáticamente.
-
----
-
-## 24. Componentes sugeridos
-
-Separar la interfaz en componentes reutilizables:
-
-- `LivePlayerScreen`
-- `LivePlayerSurface`
-- `ProgramInfoOverlay`
-- `RecentChannelsRow`
-- `QuickChannelList`
-- `ChannelRow`
-- `CategorySidebar`
-- `ElectronicProgramGuide`
-- `EpgChannelColumn`
-- `EpgTimelineHeader`
-- `EpgProgramCell`
-- `ProgramDetailsPanel`
-- `ContextActionPanel`
-- `PlaybackStatusOverlay`
-- `LoadingOverlay`
-- `PlaybackErrorOverlay`
-- `ToastMessage`
-- `RemoteFocusManager`
-
-Separar claramente:
-
-- Estado del reproductor.
-- Estado de navegación.
-- Estado de overlays.
-- Datos EPG.
-- Canales.
-- Categorías.
-- Historial.
-- Favoritos.
-
----
-
-## 25. Modelo de estados de interfaz
-
-Crear un estado explícito para las capas:
-
-- `FULLSCREEN`
-- `PROGRAM_INFO`
-- `RECENT_CHANNELS`
-- `QUICK_CHANNEL_LIST`
-- `CATEGORY_LIST`
-- `EPG_GUIDE`
-- `PROGRAM_DETAILS`
-- `CONTEXT_MENU`
-- `PLAYBACK_ERROR`
-- `LOADING`
-
-No controlar toda la interfaz mediante múltiples booleanos independientes que puedan producir combinaciones inválidas.
-
-Permitir estados compuestos solo cuando sean necesarios, por ejemplo:
-
-- Guía + categorías.
-- Guía + menú contextual.
-- Reproductor + barra de información.
-- Reproductor + recientes.
-
----
-
-## 26. Flujo principal esperado
-
-### 26.1 Abrir TV en vivo
-
-1. Cargar último canal.
-2. Iniciar stream.
-3. Mostrar información breve.
-4. Ocultar información.
-5. Dejar video limpio.
-
-### 26.2 Consultar información
-
-1. Presionar OK.
-2. Barra inferior entra suavemente.
-3. Mostrar programa actual, siguiente y progreso.
-4. Ocultarla después de inactividad.
-
-### 26.3 Ver canales recientes
-
-1. Abrir barra.
-2. Abrir fila de recientes.
-3. Navegar horizontalmente.
-4. Presionar OK.
-5. Cambiar canal.
-6. Cerrar fila.
-7. Mostrar información del nuevo canal.
-
-### 26.4 Abrir lista de canales
-
-1. Ejecutar acción asignada.
-2. Panel entra desde la izquierda.
-3. Enfocar canal activo.
-4. Navegar sin cambiar la reproducción.
-5. OK confirma el nuevo canal.
-6. Panel se cierra.
-7. Reproducción cambia.
-
-### 26.5 Abrir categorías
-
-1. Desde la lista, presionar izquierda.
-2. Panel de categorías entra.
-3. Seleccionar categoría.
-4. Actualizar canales.
-5. Derecha vuelve a lista.
-6. Back cierra categorías.
-
-### 26.6 Abrir guía
-
-1. Ejecutar acción de guía.
-2. Mostrar cuadrícula.
-3. Enfocar programa actual del canal activo.
-4. Navegar vertical y horizontalmente.
-5. OK reproduce o abre opciones.
-6. Back regresa al video.
-
-### 26.7 Abrir menú contextual
-
-1. Mantener OK.
-2. Panel derecho entra.
-3. Mostrar acciones válidas.
-4. Ejecutar acción.
-5. Cerrar panel.
-6. Mantener el foco y la vista anterior.
-
----
-
-## 27. Criterios de aceptación
-
-La implementación se considera correcta cuando:
-
-- El video continúa reproduciéndose al abrir listas y paneles.
-- La aplicación puede operarse completamente con un control remoto.
-- El foco nunca se pierde.
-- La lista rápida abre sobre el video.
-- Las categorías entran desde la izquierda.
-- El menú contextual entra desde la derecha.
-- La barra informativa entra desde abajo.
-- La guía muestra canales, horarios y programas en una cuadrícula.
-- La línea de hora actual se actualiza correctamente.
-- El canal activo está siempre identificado.
-- El programa actual muestra progreso.
-- Los programas anteriores con Catch-up pueden reproducirse.
-- Los favoritos se actualizan inmediatamente.
-- Los canales recientes conservan el orden correcto.
-- Back cierra una capa a la vez.
-- El cambio de canal no recrea toda la pantalla.
-- La interfaz no parpadea al cambiar entre overlays.
-- Las transiciones mantienen una duración uniforme.
-- El rendimiento permanece fluido con listas grandes.
-- Los controles se ocultan automáticamente durante la reproducción.
-- La experiencia visual mantiene el video como elemento principal en todo momento.
-
----
-
-## 28. Entrega requerida
+# 2. Trabajo previo obligatorio
 
 Antes de modificar código:
 
-1. Revisar la arquitectura actual del módulo de TV en vivo.
-2. Identificar qué componentes ya existen.
-3. Crear un plan de implementación por fases.
-4. Indicar qué archivos serán creados o modificados.
-5. Definir el modelo de estados.
-6. Definir el flujo de eventos del control remoto.
-7. Definir cómo se conservará una sola instancia del reproductor.
-8. Explicar cómo se conectará la guía EPG con canales y programas.
-9. Explicar cómo se implementarán las animaciones.
-10. Señalar riesgos de rendimiento o conflictos con el código actual.
+1. Reproduce y analiza completamente el video de referencia.
+2. Divide el video en escenas funcionales.
+3. Identifica cada vista, overlay, panel, menú y transición.
+4. Registra el momento aproximado en que aparece cada interacción.
+5. Crea una tabla de estados.
+6. Crea un mapa de navegación con el control remoto.
+7. Identifica qué elementos permanecen fijos y cuáles se desplazan.
+8. Identifica qué panel aparece desde cada dirección.
+9. Identifica qué elemento recupera el foco al cerrar cada capa.
+10. Compara la implementación actual con la referencia.
+11. Enumera todas las diferencias encontradas.
+12. Propón los archivos que deben ser reemplazados, no solo retocados.
 
-Después, implementar en fases:
+No empieces a implementar hasta completar este análisis.
 
-### Fase 1
+---
 
-Reproductor, pantalla completa y barra de información.
+# 3. Evidencia requerida antes de programar
 
-### Fase 2
+Entrega primero un documento de análisis con esta estructura:
 
-Lista rápida, categorías y navegación con D-pad.
+## 3.1 Escenas observadas
 
-### Fase 3
+Para cada escena del video:
 
-Canales recientes, favoritos e historial.
+* Marca de tiempo aproximada.
+* Estado inicial.
+* Botón presionado.
+* Elementos visibles.
+* Posición de cada elemento.
+* Elemento con foco.
+* Transición ejecutada.
+* Estado final.
+* Acción de Back.
+* Acción de OK.
+* Acción de pulsación larga de OK.
+* Comportamiento de arriba, abajo, izquierda y derecha.
 
-### Fase 4
+## 3.2 Comparación con la implementación actual
 
-Guía EPG completa y línea de hora actual.
+Crear una tabla con:
 
-### Fase 5
+| Elemento | Referencia | Implementación actual | Diferencia | Acción requerida |
+| -------- | ---------- | --------------------- | ---------- | ---------------- |
 
-Menús contextuales, detalles y Catch-up.
+Incluir al menos:
 
-### Fase 6
+* Reproductor.
+* Overlay de información.
+* Lista de canales.
+* Categorías.
+* Guía EPG.
+* Panel de acciones.
+* Canales recientes.
+* Indicadores de foco.
+* Gradientes.
+* Tamaños.
+* Espaciados.
+* Animaciones.
+* Manejo de Back.
+* Manejo de OK.
+* Foco al abrir.
+* Foco al cerrar.
+* Persistencia del video.
+* Cambio de canal.
+* Buffering.
+* Estados sin EPG.
 
-Pulido de animaciones, rendimiento, errores y persistencia.
+## 3.3 Matriz de entradas del control remoto
 
-No entregar únicamente una maqueta estática. Todos los elementos deben quedar conectados a estados y eventos reales, preparados para recibir información del proveedor, EPG y reproductor.
+Crear una tabla por cada estado:
+
+| Estado | Arriba | Abajo | Izquierda | Derecha | OK | OK largo | Back |
+| ------ | ------ | ----- | --------- | ------- | -- | -------- | ---- |
+
+No asumir que una tecla hace lo mismo en todas las vistas.
+
+---
+
+# 4. Arquitectura de la pantalla
+
+La pantalla de TV en vivo debe construirse como una sola superficie persistente compuesta por capas.
+
+Orden obligatorio:
+
+1. Superficie del reproductor.
+2. Capa de oscurecimiento contextual.
+3. Overlay informativo inferior.
+4. Lista o guía.
+5. Panel de categorías.
+6. Panel contextual.
+7. Diálogos.
+8. Mensajes temporales.
+9. Indicadores de buffering o error.
+
+El reproductor debe permanecer montado mientras se abren o cierran overlays.
+
+No navegar a una nueva pantalla para mostrar:
+
+* Información del canal.
+* Lista rápida.
+* Categorías.
+* Guía.
+* Menú contextual.
+* Canales recientes.
+
+Estas funciones deben aparecer sobre el reproductor.
+
+No recrear el reproductor al cambiar de overlay.
+
+No reiniciar el stream al abrir o cerrar menús.
+
+---
+
+# 5. Pantalla completa
+
+Al entrar a TV en vivo:
+
+* Mostrar el último canal reproducido.
+* Mantener el video a pantalla completa.
+* No dejar barras permanentes.
+* No mostrar encabezados generales de la aplicación.
+* No mostrar navegación inferior.
+* No mostrar un panel lateral hasta que el usuario lo solicite.
+* Aplicar modo inmersivo.
+* Mostrar información temporal del canal al iniciar reproducción.
+* Ocultar automáticamente esa información.
+* Dejar únicamente el video visible.
+
+El primer frame disponible debe reemplazar el fondo de carga sin cambiar de pantalla.
+
+---
+
+# 6. Overlay informativo inferior
+
+Al presionar OK en reproducción limpia, mostrar el overlay inferior de información.
+
+Debe reproducir fielmente la composición de la referencia:
+
+* Panel ancho en la parte inferior.
+* Video visible por encima.
+* Oscurecimiento gradual desde abajo.
+* Información alineada horizontalmente.
+* Logotipo del canal.
+* Número y nombre del canal.
+* Programa actual.
+* Horario.
+* Programa siguiente.
+* Barra de progreso.
+* Hora actual.
+* Indicadores secundarios.
+
+El overlay no debe sentirse como una tarjeta flotante independiente.
+
+Debe integrarse con un gradiente inferior.
+
+No utilizar un diálogo centrado.
+
+No reducir el tamaño del reproductor.
+
+No pausar el canal.
+
+## Comportamiento
+
+* OK desde pantalla limpia: abre overlay.
+* Back: cierra overlay.
+* Inactividad: cierra overlay.
+* Cualquier tecla válida reinicia el temporizador.
+* El cierre debe restaurar reproducción completamente limpia.
+* El foco inicial debe coincidir con el comportamiento de la referencia.
+
+---
+
+# 7. Lista de canales
+
+La lista de canales debe aparecer como una capa vertical sobre el lado izquierdo.
+
+No debe ocupar toda la pantalla.
+
+Debe mantener una parte importante del video visible.
+
+Debe incluir:
+
+* Categoría activa.
+* Filas de canales.
+* Logotipos.
+* Número.
+* Nombre.
+* Programa actual.
+* Horario.
+* Progreso.
+* Estado favorito.
+* Estado Catch-up cuando exista.
+* Identificación separada de:
+
+  * Canal actualmente reproducido.
+  * Canal actualmente enfocado.
+
+Estos dos estados no deben confundirse.
+
+## Foco
+
+La fila enfocada debe reproducir fielmente:
+
+* Fondo de selección.
+* Contraste.
+* Tamaño.
+* Espaciado.
+* Alineación.
+* Elementos adicionales visibles.
+* Transición de entrada y salida del foco.
+
+No usar un borde genérico grueso si no aparece así en la referencia.
+
+No usar escalado excesivo.
+
+No mover el video.
+
+## Navegación
+
+* Arriba y abajo: cambian de fila.
+* OK: reproduce el canal seleccionado.
+* Izquierda: abre categorías cuando corresponda.
+* Derecha: realiza la acción observada en la referencia.
+* OK largo: abre menú contextual.
+* Back: cierra la lista.
+* Al cerrar, restaurar reproducción limpia.
+* Al volver a abrir, enfocar el canal activo o la posición observada en la referencia.
+
+No cambiar de canal solamente por mover el foco.
+
+El cambio de canal ocurre al confirmar con OK, salvo que el video demuestre un comportamiento diferente.
+
+---
+
+# 8. Panel de categorías
+
+El panel de categorías debe entrar desde la izquierda.
+
+Debe aparecer como una columna adicional y modificar la composición de la lista de canales de la misma manera que la referencia.
+
+No reemplazar la lista completa.
+
+No abrir una pantalla independiente.
+
+Debe mostrar:
+
+* Favoritos.
+* Todos los canales.
+* Recientes.
+* Categorías de la fuente.
+* Otras agrupaciones disponibles.
+
+## Estados distintos
+
+Diferenciar visualmente:
+
+* Categoría activa.
+* Categoría enfocada.
+* Categoría deshabilitada.
+* Categoría sin canales.
+
+## Navegación
+
+* Arriba y abajo: cambian categoría enfocada.
+* OK: activa la categoría.
+* Derecha: devuelve el foco a la lista de canales.
+* Back: cierra el panel de categorías.
+* Al cerrar, la lista debe recuperar exactamente su posición y foco anterior.
+
+Al cambiar categoría:
+
+* No mostrar una pantalla negra.
+* No cerrar todo.
+* No perder el canal activo.
+* No reiniciar el reproductor.
+* Actualizar la lista con la misma transición observada en la referencia.
+
+---
+
+# 9. Guía EPG
+
+La guía debe replicar la estructura observable de la aplicación de referencia.
+
+Debe incluir:
+
+* Columna fija de canales.
+* Encabezado fijo de tiempo.
+* Celdas de programas.
+* Horas proporcionales.
+* Programa actual.
+* Programas anteriores.
+* Programas futuros.
+* Línea de hora actual.
+* Información ampliada del elemento enfocado.
+* Indicadores de Catch-up cuando existan.
+* Canal activo claramente visible.
+* Programa enfocado claramente visible.
+
+## Desplazamiento
+
+* La columna de canales debe permanecer fija.
+* El encabezado temporal debe permanecer fijo.
+* La cuadrícula debe desplazarse horizontalmente.
+* Las filas deben desplazarse verticalmente.
+* El movimiento debe ser progresivo y suave.
+* El foco debe permanecer visible.
+* Al cambiar verticalmente de canal, conservar la posición temporal.
+* Al cambiar horizontalmente, desplazar solo lo necesario.
+
+No usar una cuadrícula genérica que salte una pantalla completa por cada pulsación.
+
+No centrar siempre el programa enfocado si la referencia no lo hace.
+
+## Acciones
+
+* Programa en vivo + OK: reproducir.
+* Programa pasado con Catch-up + OK: reproducir desde archivo o abrir acción correspondiente.
+* Programa futuro + OK: mostrar acciones aplicables.
+* OK largo: menú contextual.
+* Back: regresar al nivel anterior sin cerrar más capas de las necesarias.
+
+---
+
+# 10. Canales recientes
+
+Implementar la fila horizontal de canales recientes como aparece en la referencia.
+
+Debe mostrarse sobre el video.
+
+Cada elemento debe incluir los datos visibles en la referencia.
+
+La tarjeta enfocada debe distinguirse mediante:
+
+* Cambio de fondo.
+* Cambio de tamaño controlado.
+* Contraste.
+* Información adicional cuando corresponda.
+* Transición corta.
+
+Navegación:
+
+* Izquierda y derecha: recorren recientes.
+* OK: reproduce.
+* Back: cierra.
+* El canal actual debe estar identificado.
+* Al seleccionar otro canal, cerrar la fila y mostrar información del nuevo canal.
+
+---
+
+# 11. Menú contextual
+
+El menú contextual debe aparecer desde el lado correspondiente observado en la referencia.
+
+No usar un diálogo centrado.
+
+No utilizar un menú emergente pequeño.
+
+Debe ser un panel vertical de altura completa o casi completa, según la referencia.
+
+Mostrar únicamente acciones válidas.
+
+Posibles acciones:
+
+* Reproducir.
+* Favorito.
+* Quitar favorito.
+* Información.
+* Guía del canal.
+* Catch-up.
+* Grabar.
+* Recordatorio.
+* Opciones del canal.
+* Ocultar.
+* Bloquear.
+* Asignar EPG.
+* Buscar contenido relacionado.
+
+## Comportamiento
+
+* Arriba y abajo: navegan acciones.
+* OK: ejecuta.
+* Back: cierra únicamente el menú.
+* Al cerrar, restaurar el foco exacto que lo abrió.
+* No cerrar la lista o la guía detrás.
+* No reiniciar el video.
+
+---
+
+# 12. Transiciones
+
+Las transiciones deben medirse y reproducirse de forma consistente.
+
+No usar animaciones predeterminadas sin ajustar.
+
+No usar rebotes.
+
+No usar elasticidad.
+
+No usar escalados exagerados.
+
+No aplicar animaciones decorativas que no aparezcan en la referencia.
+
+## Paneles izquierdos
+
+* Entrada horizontal desde la izquierda.
+* Aceleración inicial rápida.
+* Desaceleración al final.
+* Scrim progresivo.
+* Video fijo.
+* Duración corta.
+
+## Paneles derechos
+
+* Entrada horizontal desde la derecha.
+* Oscurecimiento gradual del contenido posterior.
+* No desplazar el reproductor.
+* No cerrar el panel anterior.
+
+## Overlay inferior
+
+* Entrada desde abajo.
+* Fundido simultáneo.
+* Gradiente progresivo.
+* Salida hacia abajo con fundido.
+
+## Foco
+
+* Cambio inmediato pero suavizado.
+* Duración breve.
+* Sin retraso perceptible.
+* No bloquear pulsaciones repetidas.
+* Mantener respuesta rápida del D-pad.
+
+## Cambio de canal
+
+* No ejecutar una transición de pantalla completa.
+* No navegar a otra actividad.
+* Conservar el reproductor.
+* Mostrar estado de carga discreto.
+* Sustituir el stream.
+* Mostrar información del nuevo canal.
+* Evitar parpadeo negro innecesario.
+
+---
+
+# 13. Medición visual
+
+No uses valores arbitrarios.
+
+Extrae del video y de las capturas:
+
+* Porcentaje de pantalla ocupado por la lista.
+* Porcentaje ocupado por categorías.
+* Altura del overlay inferior.
+* Altura de filas.
+* Tamaño relativo de logotipos.
+* Separación entre columnas.
+* Márgenes externos.
+* Posición del título.
+* Posición de horarios.
+* Grosor de la barra de progreso.
+* Intensidad del oscurecimiento.
+* Distancia de desplazamiento de paneles.
+* Tamaño del foco.
+* Cantidad de elementos visibles.
+
+Documentar cada medida como:
+
+* Valor observado aproximado.
+* Valor implementado.
+* Justificación.
+* Captura de comparación.
+
+Usar proporciones de pantalla, `dp` y `sp`, pero preservar la composición relativa.
+
+---
+
+# 14. Comparación visual obligatoria
+
+Después de implementar cada vista:
+
+1. Captura una imagen de la aplicación.
+2. Captura el fotograma equivalente de la referencia.
+3. Colócalas lado a lado.
+4. Identifica diferencias.
+5. Corrige:
+
+   * Posición.
+   * Tamaño.
+   * Espaciado.
+   * Opacidad.
+   * Tipografía.
+   * Alineación.
+   * Foco.
+   * Estado activo.
+   * Gradientes.
+   * Animación.
+6. Repite hasta que las diferencias sean mínimas.
+
+No considerar terminada una vista solo porque contiene los mismos elementos.
+
+La composición y el comportamiento también deben coincidir.
+
+---
+
+# 15. Estado de interfaz
+
+Utilizar una máquina de estados explícita.
+
+Estados mínimos:
+
+* `FullscreenPlayback`
+* `ProgramInfoVisible`
+* `RecentChannelsVisible`
+* `ChannelListVisible`
+* `CategoryPanelVisible`
+* `EpgVisible`
+* `ProgramDetailsVisible`
+* `ContextMenuVisible`
+* `Buffering`
+* `PlaybackError`
+
+Además, guardar:
+
+* Canal activo.
+* Canal enfocado.
+* Categoría activa.
+* Categoría enfocada.
+* Programa enfocado.
+* Vista anterior.
+* Elemento que abrió la capa actual.
+* Foco que debe restaurarse al cerrar.
+* Posición vertical de cada categoría.
+* Posición horizontal de la guía.
+* Temporizador del overlay.
+* Estado de pulsación larga.
+
+No implementar la navegación mediante muchos booleanos independientes sin jerarquía.
+
+---
+
+# 16. Manejo del botón Back
+
+Back debe cerrar una sola capa por pulsación.
+
+Orden esperado:
+
+1. Diálogo.
+2. Menú contextual.
+3. Panel de categorías.
+4. Detalles del programa.
+5. Guía o lista.
+6. Recientes.
+7. Overlay informativo.
+8. Reproducción limpia.
+9. Salir del módulo únicamente desde reproducción limpia.
+
+No cerrar varias capas a la vez.
+
+No salir accidentalmente.
+
+No perder el foco previo.
+
+---
+
+# 17. Rendimiento
+
+La implementación debe sentirse inmediata en dispositivos Android TV de gama media.
+
+Requisitos:
+
+* Una sola instancia principal del reproductor.
+* Overlays montados sobre la misma pantalla.
+* Listas virtualizadas.
+* Guía EPG virtualizada.
+* Caché de logotipos.
+* Precarga de información del canal anterior y siguiente.
+* Debounce para cambios rápidos.
+* No reiniciar reproducción por cambios de foco.
+* No reconstruir toda la guía al actualizar la hora.
+* No bloquear el hilo principal.
+* Animaciones fluidas.
+* Sin parpadeos.
+* Sin pérdida del foco por recomposición.
+
+---
+
+# 18. Prohibiciones técnicas
+
+No entregar:
+
+* Una pantalla estática.
+* Un prototipo sin conexión al reproductor.
+* Una guía falsa.
+* Datos hardcoded como solución final.
+* Navegación táctil adaptada.
+* Componentes móviles sin comportamiento TV.
+* Una lista genérica de Compose sin control de foco.
+* Un reproductor que se recree al abrir paneles.
+* Navegación entre actividades para cada overlay.
+* Animaciones predeterminadas sin calibrar.
+* Una interfaz “parecida” pero con otro flujo.
+* Un diseño alternativo que el agente considere mejor.
+* Cambios visuales no solicitados.
+* Menús permanentes.
+* Encabezados adicionales.
+* Botones visibles que no existan en la referencia.
+* Colores creativos.
+* Gradientes distintos.
+* Tarjetas excesivamente redondeadas.
+* Sombras o escalas exageradas.
+
+---
+
+# 19. Criterios de aceptación
+
+La tarea no se considera completada hasta verificar lo siguiente:
+
+* El reproductor permanece visible y activo detrás de los overlays.
+* La lista de canales aparece en la misma zona y proporción que la referencia.
+* Las categorías aparecen desde la dirección correcta.
+* La guía conserva la estructura visual observada.
+* La información inferior ocupa una proporción equivalente.
+* El canal activo y el canal enfocado están claramente diferenciados.
+* El foco inicial de cada vista es correcto.
+* El foco se restaura correctamente al cerrar.
+* Back cierra exactamente una capa.
+* OK ejecuta la acción correcta según el estado.
+* OK largo abre el menú contextual.
+* Las transiciones tienen dirección, duración y curva coherentes con la referencia.
+* No hay saltos visuales.
+* No hay pantallas negras innecesarias.
+* No se recrea el reproductor.
+* No cambia el canal al mover solamente el foco.
+* Los canales recientes funcionan.
+* Favoritos funcionan.
+* La guía EPG funciona.
+* Catch-up funciona cuando el proveedor lo permite.
+* El progreso de programas se actualiza.
+* La línea de tiempo actual se actualiza.
+* La interfaz funciona completamente con D-pad.
+* La implementación visual fue comparada con fotogramas equivalentes.
+* Se corrigieron las diferencias principales antes de cerrar la tarea.
+
+---
+
+# 20. Forma de trabajo requerida
+
+Ejecuta el trabajo por etapas:
+
+## Etapa 1: auditoría
+
+* Analizar referencia.
+* Analizar implementación actual.
+* Documentar diferencias.
+* Definir máquina de estados.
+* Definir mapa del control remoto.
+
+## Etapa 2: estructura
+
+* Corregir arquitectura.
+* Garantizar una sola instancia del reproductor.
+* Implementar jerarquía de capas.
+* Implementar restauración de foco.
+
+## Etapa 3: reproducción e información
+
+* Pantalla completa.
+* Overlay inferior.
+* Cambio de canal.
+* Buffering.
+* Errores.
+
+## Etapa 4: canales y categorías
+
+* Lista de canales.
+* Panel de categorías.
+* Foco.
+* Navegación.
+* Canal activo frente a canal enfocado.
+
+## Etapa 5: guía
+
+* Columna de canales.
+* Línea de tiempo.
+* Celdas.
+* Desplazamiento.
+* Detalles.
+* Catch-up.
+
+## Etapa 6: recientes y menú contextual
+
+* Canales recientes.
+* Favoritos.
+* Menú de acciones.
+* Restauración de foco.
+
+## Etapa 7: comparación visual
+
+* Capturas.
+* Comparaciones.
+* Corrección de medidas.
+* Corrección de transiciones.
+* Corrección de estados.
+
+No avances a la siguiente etapa si la anterior no funciona correctamente.
+
+---
+
+# 21. Entrega final
+
+La entrega debe incluir:
+
+* Código funcional.
+* Lista de archivos modificados.
+* Explicación de la máquina de estados.
+* Mapa final del control remoto.
+* Tabla de transiciones.
+* Capturas comparativas.
+* Lista de diferencias pendientes.
+* Pruebas ejecutadas.
+* Pruebas de navegación con D-pad.
+* Pruebas de restauración de foco.
+* Pruebas de cambio rápido de canales.
+* Pruebas de guía EPG con muchos canales.
+* Pruebas de rendimiento.
+* Confirmación de que el reproductor no se recrea al abrir overlays.
+
+No marcar la tarea como completada si todavía existen diferencias visibles importantes respecto al material de referencia.
