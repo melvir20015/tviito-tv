@@ -81,14 +81,19 @@ class LiveTvReducerTest {
     }
 
     @Test fun longOkAlwaysOpensContextMenuAndBackRestoresFocusLayer() {
-        val state = LiveTvUiState(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, channelIds = channels, focusedProgramId = null)
+        assertContextMenuOpensAndBackRestoresOnlyMenu(LiveTvMode.CHANNEL_LIST_VISIBLE)
+    }
 
-        val menu = LiveTvReducer.reduce(state, LiveTvAction.LongOk)
-        val restored = LiveTvReducer.reduce(menu, LiveTvAction.Back)
+    @Test fun contextMenuOpenedFromGuideBackClosesOnlyMenu() {
+        assertContextMenuOpensAndBackRestoresOnlyMenu(LiveTvMode.EPG_VISIBLE)
+    }
 
-        assertEquals(LiveTvMode.CONTEXT_MENU_VISIBLE, menu.mode)
-        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, menu.openedFromMode)
-        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, restored.mode)
+    @Test fun contextMenuOpenedFromRecentChannelsBackClosesOnlyMenu() {
+        assertContextMenuOpensAndBackRestoresOnlyMenu(LiveTvMode.RECENT_CHANNELS_VISIBLE)
+    }
+
+    @Test fun contextMenuOpenedFromBottomProgramInfoBackClosesOnlyMenu() {
+        assertContextMenuOpensAndBackRestoresOnlyMenu(LiveTvMode.PROGRAM_INFO_VISIBLE)
     }
 
     @Test fun focusMovementDoesNotChangePlayingChannel() {
@@ -241,6 +246,27 @@ class LiveTvReducerTest {
         assertEquals(LiveTvMode.RECENT_CHANNELS_VISIBLE, menu.openedFromMode)
         assertEquals(LiveTvMode.RECENT_CHANNELS_VISIBLE, movedBehindMenu.mode)
         assertEquals(20L, movedBehindMenu.focusedChannelId)
+    }
+
+    private fun assertContextMenuOpensAndBackRestoresOnlyMenu(originMode: LiveTvMode) {
+        val state = LiveTvUiState(
+            mode = originMode,
+            channelIds = channels,
+            focusedChannelId = 20L,
+            selectedChannelId = 10L,
+            playingChannelId = 10L,
+            focusedProgramId = null,
+        )
+
+        val menu = LiveTvReducer.reduce(state, LiveTvAction.LongOk)
+        val restored = LiveTvReducer.reduce(menu, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.CONTEXT_MENU_VISIBLE, menu.mode)
+        assertEquals(originMode, menu.openedFromMode)
+        assertEquals(originMode, restored.mode)
+        assertEquals(20L, restored.focusedChannelId)
+        assertEquals(10L, restored.selectedChannelId)
+        assertEquals(10L, restored.playingChannelId)
     }
 
 }
