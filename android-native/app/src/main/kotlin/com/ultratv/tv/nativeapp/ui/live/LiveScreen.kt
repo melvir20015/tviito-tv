@@ -161,14 +161,15 @@ private fun liveTvFormFactor(maxWidth: Dp): LiveTvFormFactor = when {
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) = LiveTvScreen(onPlay = onPlay, vm = vm)
+fun LiveScreen(vm: LiveViewModel = hiltViewModel()) = LiveTvScreen(vm = vm)
 
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
-fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) {
+fun LiveTvScreen(vm: LiveViewModel = hiltViewModel()) {
     val realCats by vm.categories.collectAsState()
     val channels by vm.channels.collectAsState()
+    val hasLiveProvider by vm.hasLiveProvider.collectAsState()
     val selected by vm.selectedCategory.collectAsState()
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
@@ -213,7 +214,11 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         activeChannel = ch
         dispatch(LiveTvAction.FocusChannel(ch.id))
         dispatch(LiveTvAction.PlayerLoading(ch.id))
-        vm.resolveAndPlay(ch) { _, _ -> dispatch(LiveTvAction.PlaybackReady) }
+        vm.resolveAndPlay(
+            channel = ch,
+            onReady = { _, _ -> dispatch(LiveTvAction.PlaybackReady) },
+            onError = { message -> dispatch(LiveTvAction.PlaybackError(message)) },
+        )
     }
 
     BackHandler(enabled = uiState.mode != LiveTvMode.FULLSCREEN_PLAYBACK) { dispatch(LiveTvAction.Back) }
@@ -282,7 +287,14 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         true
     }) {
         val formFactor = liveTvFormFactor(maxWidth)
-        LiveBackgroundPlayer(channel = videoChannel, locked = lockedKey(videoChannel) in locked, vm = vm)
+        LiveBackgroundPlayer(
+            channel = videoChannel,
+            locked = lockedKey(videoChannel) in locked,
+            vm = vm,
+            onBuffering = { dispatch(LiveTvAction.PlayerLoading(videoChannel?.id)) },
+            onReady = { dispatch(LiveTvAction.PlaybackReady) },
+            onError = { dispatch(LiveTvAction.PlaybackError(it)) },
+        )
         if (visibleMode != LiveTvMode.FULLSCREEN_PLAYBACK && visibleMode != LiveTvMode.PROGRAM_INFO_VISIBLE) Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
         val recentChannels = remember(channels, activeChannel?.id, livePrefs.livePreviousChannelRemoteId, livePrefs.liveLastChannelRemoteId) {
             val preferred = listOfNotNull(activeChannel?.remoteId, livePrefs.liveLastChannelRemoteId.takeIf { it.isNotBlank() }, livePrefs.livePreviousChannelRemoteId.takeIf { it.isNotBlank() })
@@ -315,6 +327,17 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         AnimatedVisibility(visible = visibleMode == LiveTvMode.PROGRAM_INFO_VISIBLE, enter = slideInVertically(initialOffsetY = { it }), exit = slideOutVertically(targetOffsetY = { it }), modifier = Modifier.align(Alignment.BottomCenter)) {
             LiveChannelInfoBar(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, videoChannel?.remoteId in favorites, resolving || uiState.playerState.isLoading, Modifier.fillMaxWidth().fillMaxHeight(0.32f))
         }
+
+        LivePlaybackStatusOverlay(
+            hasProvider = hasLiveProvider,
+            channelsLoading = !hasLiveProvider && channels.isEmpty() && realCats.isEmpty(),
+            channelsEmpty = hasLiveProvider && channels.isEmpty(),
+            locked = lockedKey(videoChannel) in locked,
+            resolving = resolving,
+            buffering = uiState.mode == LiveTvMode.BUFFERING || uiState.playerState.isLoading,
+            errorMessage = uiState.playerState.errorMessage,
+            modifier = Modifier.align(Alignment.Center),
+        )
         if (uiState.mode == LiveTvMode.CONTEXT_MENU_VISIBLE) {
             LiveContextMenu(
                 channel = contextSource,
@@ -565,7 +588,14 @@ private fun Modifier.onFocusEventCompat(block: () -> Unit) = this.then(Modifier.
 
 
 @Composable
-private fun LiveBackgroundPlayer(channel: ChannelEntity?, locked: Boolean, vm: LiveViewModel) {
+private fun LiveBackgroundPlayer(
+    channel: ChannelEntity?,
+    locked: Boolean,
+    vm: LiveViewModel,
+    onBuffering: () -> Unit,
+    onReady: () -> Unit,
+    onError: (String) -> Unit,
+) {
     val context = LocalContext.current
     val player = remember { ExoPlayer.Builder(context).build().apply { playWhenReady = true } }
     val coordinator = vm.previewCoordinator
@@ -575,10 +605,76 @@ private fun LiveBackgroundPlayer(channel: ChannelEntity?, locked: Boolean, vm: L
             override fun play(url: String) { player.setMediaItem(androidx.media3.common.MediaItem.fromUri(url)); player.prepare() }
         }
     }
-    DisposableEffect(player) { onDispose { coordinator.clear(controller); player.release() } }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                when (playbackState) {
+                    Player.STATE_BUFFERING -> { coordinator.onBuffering(); onBuffering() }
+                    Player.STATE_READY -> { coordinator.onPlaying(); onReady() }
+                }
+            }
+
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                val safeMessage = error.message.sanitizeLivePlaybackMessage()
+                coordinator.onError(safeMessage)
+                onError(safeMessage)
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            coordinator.clear(controller)
+            player.release()
+        }
+    }
     val scope = rememberCoroutineScope()
     LaunchedEffect(channel?.id, locked) { coordinator.request(scope, channel, locked, controller) }
     AndroidView(factory = { PlayerView(it).apply { useController = false; this.player = player } }, modifier = Modifier.fillMaxSize())
+}
+
+
+@Composable
+private fun LivePlaybackStatusOverlay(
+    hasProvider: Boolean,
+    channelsLoading: Boolean,
+    channelsEmpty: Boolean,
+    locked: Boolean,
+    resolving: Boolean,
+    buffering: Boolean,
+    errorMessage: String?,
+    modifier: Modifier = Modifier,
+) {
+    val title = when {
+        !hasProvider -> "Sin proveedor configurado"
+        channelsLoading -> "Cargando canales…"
+        channelsEmpty -> "Sin canales disponibles"
+        locked -> "Canal bloqueado"
+        errorMessage != null -> "Error de reproducción"
+        resolving -> "Resolviendo stream…"
+        buffering -> "Buffering…"
+        else -> null
+    } ?: return
+    val detail = when {
+        !hasProvider -> "Agrega o activa un proveedor para ver TV en vivo."
+        channelsLoading -> "Buscando la lista local de canales."
+        channelsEmpty -> "El proveedor activo no tiene canales visibles para esta categoría."
+        locked -> "Este canal requiere desbloqueo antes de reproducirse."
+        errorMessage != null -> errorMessage
+        resolving -> "Preparando una URL reproducible sin mostrar datos sensibles."
+        buffering -> "Esperando datos del canal seleccionado."
+        else -> ""
+    }
+    Column(
+        modifier
+            .background(LiveTvColors.surface.copy(alpha = 0.90f), LiveTvShapes.panel)
+            .border(1.dp, LiveTvColors.outline, LiveTvShapes.panel)
+            .padding(horizontal = 28.dp, vertical = 22.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(title, color = LiveTvColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(8.dp))
+        Text(detail, color = LiveTvColors.textSecondary, fontSize = 15.sp, maxLines = 3)
+    }
 }
 
 

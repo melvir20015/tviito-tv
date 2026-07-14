@@ -275,7 +275,7 @@ private fun NavGraph(nav: androidx.navigation.NavHostController) {
             )
         }
         composable(Routes.LIVE) {
-            LiveScreen(onPlay = { url, title -> nav.navigate(Routes.player(url, title)) })
+            LiveScreen()
         }
         composable(Routes.MOVIES) {
             MoviesScreen(onOpen = { id -> nav.navigate(Routes.movieDetail(id)) })

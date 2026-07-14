@@ -146,6 +146,11 @@ class LiveViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    val hasLiveProvider: StateFlow<Boolean> = providers
+        .map { list -> list.any { it.active } || list.isNotEmpty() }
+        .distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     private val _selectedCategory = MutableStateFlow<String>(CATEGORY_ALL)
     val selectedCategory: StateFlow<String> = _selectedCategory.asStateFlow()
 
@@ -340,7 +345,11 @@ class LiveViewModel @Inject constructor(
         return epgDao.forChannelInRange(channelId, startOfDay, endOfTomorrow)
     }
 
-    fun resolveAndPlay(channel: ChannelEntity, onReady: (url: String, title: String) -> Unit) {
+    fun resolveAndPlay(
+        channel: ChannelEntity,
+        onReady: (url: String, title: String) -> Unit,
+        onError: (String) -> Unit = {},
+    ) {
         // Seed the zap queue with the list the user was browsing so the
         // player can D-pad UP/DOWN through it without going back.
         zapQueue.set(channels.value, channel)
@@ -372,6 +381,8 @@ class LiveViewModel @Inject constructor(
                 val resolved = provider.resolvePlayUrl(channel.id, channel.streamUrl)
                 register(resolved)
                 onReady(resolved, channel.name)
+            } catch (error: Throwable) {
+                onError(error.safeLivePlaybackMessage())
             } finally {
                 _resolving.value = false
             }
@@ -395,4 +406,20 @@ class LiveViewModel @Inject constructor(
             }
         }
     }
+}
+
+
+internal fun Throwable.safeLivePlaybackMessage(): String = message.sanitizeLivePlaybackMessage()
+
+internal fun String?.sanitizeLivePlaybackMessage(): String {
+    val raw = this?.takeIf { it.isNotBlank() } ?: return "No se pudo preparar el canal."
+    val withoutUrls = raw
+        .replace(Regex("""(?i)\b(?:https?|rtmps?|rtsp|file)://\S+"""), "[origen oculto]")
+        .replace(Regex("""(?i)(password|passwd|pass|pwd|token|key|secret|pin|mac)=([^\s&]+)""")) { match ->
+            "${match.groupValues[1]}=[oculto]"
+        }
+        .replace(Regex("""(?i)([?&])(username|user|login)=([^\s&]+)""")) { match ->
+            "${match.groupValues[1]}${match.groupValues[2]}=[oculto]"
+        }
+    return withoutUrls.take(180).ifBlank { "No se pudo preparar el canal." }
 }

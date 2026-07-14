@@ -64,3 +64,33 @@ Este parche inicia el rediseño por la base exigida antes de reescribir la UI co
 4. Falta implementar recientes.
 5. Falta guía EPG temporal proporcional real.
 6. Falta prueba instrumental de foco, Back de una sola capa y no recreación del reproductor.
+
+## Seguimiento de ejecución — 2026-07-14
+
+### Estado real confirmado
+
+- `android-native/` sigue siendo la implementación activa revisada para TV en vivo: la navegación principal llama a `LiveScreen` desde `MainActivity` y el código del módulo está bajo `app/src/main/kotlin/com/ultratv/tv/nativeapp/ui/live/`.
+- El módulo ya tiene una superficie persistente principal en `LiveBackgroundPlayer`, montada detrás de las capas de lista, categorías, guía, recientes, información inferior y menú contextual.
+- La guía visible usa `TimelineEpgGuide` con columna de canales, encabezado horario, celdas por duración y línea de ahora; requiere validación visual real antes de ajustes finos.
+- No se detectó emulador/dispositivo Android TV disponible desde esta ejecución, por lo que la fase visual sigue bloqueada por entorno.
+
+### Fases
+
+| Fase | Estado | Evidencia / motivo |
+| --- | --- | --- |
+| A — Auditoría de estado real | Parcial | Código y documentación revisados; falta captura real del video/dispositivo para cerrar la comparación visual. |
+| B — Diagnóstico de pantalla negra | Parcial | Se añadieron estados visibles seguros para proveedor ausente, lista vacía, carga, resolución, buffering, error sanitizado y canal bloqueado. Falta prueba en dispositivo. |
+| C — Reproductor persistente e integración | Parcial | `LiveScreen` reproduce en sitio con una superficie persistente; se eliminó el callback de navegación `onPlay` para evitar integración muerta. Falta instrumentación visual de no recreación. |
+| D — Máquina de estados y D-pad | Parcial | Reducer y mapper ya cubren capas principales; pruebas existentes validan Back de una capa, OK explícito y foco sin reproducción. |
+| E — Restauración de foco | Parcial | Existe memoria de canal por capa en reducer; falta foco específico por categoría/programa/acción de menú con prueba instrumental. |
+| F — Overlays visuales | Parcial | Capas principales existen; no se hicieron ajustes visuales finos sin capturas. |
+| G — Guía EPG | Parcial | Hay timeline incremental; quedan acciones y conservación temporal avanzada por validar visualmente. |
+| H — Canales recientes | Parcial | Existe capa de recientes y filtrado por historial/últimos canales; falta ampliar pruebas de historial real de repositorio. |
+| I — Categorías/favoritos/bloqueos/orden | Parcial | Filtros y orden existen en ViewModel; se reforzó estado visible de canal bloqueado. |
+| J — Error y seguridad | Parcial | Se sanitizan mensajes visibles de reproducción para ocultar URLs y parámetros sensibles; falta auditoría completa de logs ajenos a Live. |
+| K — Evidencia visual | Bloqueada | Requiere SDK/adb/emulador o dispositivo Android TV disponible. |
+| L — Documentación de seguimiento | Terminada en esta ejecución | Esta sección registra el estado y próximos pasos. |
+
+### Próximo paso recomendado
+
+Ejecutar la app en un emulador o dispositivo Android TV con datos sintéticos, capturar los estados definidos en `VISUAL_CAPTURE_AUDIT.md` y validar que los nuevos estados de error/carga no dejan la pantalla negra ni exponen datos sensibles.

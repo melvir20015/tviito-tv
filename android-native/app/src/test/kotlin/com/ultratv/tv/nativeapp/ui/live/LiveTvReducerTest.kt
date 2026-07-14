@@ -248,6 +248,23 @@ class LiveTvReducerTest {
         assertEquals(20L, movedBehindMenu.focusedChannelId)
     }
 
+
+    @Test fun playbackErrorOcultaSuperficieYMuestraMensajeSanitizado() {
+        val state = LiveTvUiState(mode = LiveTvMode.BUFFERING, channelIds = channels, selectedChannelId = 20L)
+
+        val error = LiveTvReducer.reduce(state, LiveTvAction.PlaybackError("Fallo en [origen oculto] token=[oculto]"))
+
+        assertEquals(LiveTvMode.PLAYBACK_ERROR, error.mode)
+        assertEquals(LiveTvVideoSurfaceMode.HIDDEN, error.videoSurfaceMode)
+        assertEquals("Fallo en [origen oculto] token=[oculto]", error.playerState.errorMessage)
+    }
+
+    @Test fun sanitizerOcultaUrlsYParametrosSensibles() {
+        val sanitized = "Error https://host.test/live?token=abc&username=demo&password=secret mac=00:11".sanitizeLivePlaybackMessage()
+
+        assertEquals("Error [origen oculto] mac=[oculto]", sanitized)
+    }
+
     private fun assertContextMenuOpensAndBackRestoresOnlyMenu(originMode: LiveTvMode) {
         val state = LiveTvUiState(
             mode = originMode,
