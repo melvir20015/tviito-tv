@@ -78,6 +78,7 @@ import com.ultratv.tv.nativeapp.ui.common.ChannelLogo
 import com.ultratv.tv.nativeapp.ui.common.prettyCategoryName
 import com.ultratv.tv.nativeapp.ui.theme.UltraFonts
 import com.ultratv.tv.nativeapp.ui.theme.UltraTokens
+import com.ultratv.tv.nativeapp.ui.live.remote.RemoteActionMapper
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -158,7 +159,6 @@ private fun liveTvFormFactor(maxWidth: Dp): LiveTvFormFactor = when {
 @Composable
 fun LiveScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel = hiltViewModel()) = LiveTvScreen(onPlay = onPlay, vm = vm)
 
-private enum class LiveOverlay { Channels, Guide }
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
 @Composable
@@ -171,20 +171,20 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val showNumbers by vm.showChannelNumbers.collectAsState()
     val favorites by vm.favoriteRemoteIds.collectAsState()
     val s = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
-    var overlay by remember { mutableStateOf<LiveOverlay?>(null) }
-    var focusedChannelId by remember { mutableStateOf<Long?>(null) }
+    val livePrefs by vm.livePreferences.collectAsState()
+    val resolving by vm.resolving.collectAsState()
+    var uiState by remember { mutableStateOf(LiveTvUiState()) }
     var activeChannel by remember { mutableStateOf<ChannelEntity?>(null) }
     var contextChannel by remember { mutableStateOf<ChannelEntity?>(null) }
     var contextProgram by remember { mutableStateOf<EpgEntity?>(null) }
-    var showInfoBar by remember { mutableStateOf(true) }
-    val livePrefs by vm.livePreferences.collectAsState()
-    val resolving by vm.resolving.collectAsState()
     val categoryRequester = remember { FocusRequester() }
     val channelRequester = remember { FocusRequester() }
     val guideRequester = remember { FocusRequester() }
     val categoryListState = rememberLazyListState()
     val channelListState = rememberLazyListState()
     val guideListState = rememberLazyListState()
+    fun dispatch(action: LiveTvAction) { uiState = LiveTvReducer.reduce(uiState, action) }
+
     val categories = remember(realCats, selected, channels.size) {
         buildList {
             add(LiveCategoryUi(CATEGORY_ALL, s.liveAllChannels, if (selected == CATEGORY_ALL) channels.size else null))
@@ -194,48 +194,49 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         }
     }
     val categoryTitle = categories.firstOrNull { it.id == selected }?.title ?: "Canales"
-    val focusedChannel = channels.firstOrNull { it.id == focusedChannelId }
-    val videoChannel = activeChannel ?: focusedChannel ?: channels.firstOrNull()
+    val focusedChannel = channels.firstOrNull { it.id == uiState.focusedChannelId }
+    val selectedChannel = channels.firstOrNull { it.id == uiState.selectedChannelId }
+    val videoChannel = activeChannel ?: selectedChannel ?: focusedChannel ?: channels.firstOrNull()
+    val contextSource = contextChannel ?: focusedChannel ?: videoChannel
 
     fun playInPlace(ch: ChannelEntity) {
-        if (lockedKey(ch) in locked) { contextChannel = ch; return }
+        if (lockedKey(ch) in locked) { contextChannel = ch; dispatch(LiveTvAction.LongOk); return }
         activeChannel = ch
-        focusedChannelId = ch.id
-        showInfoBar = true
-        vm.resolveAndPlay(ch) { _, _ -> }
+        dispatch(LiveTvAction.FocusChannel(ch.id))
+        dispatch(LiveTvAction.PlayerLoading(ch.id))
+        vm.resolveAndPlay(ch) { _, _ -> dispatch(LiveTvAction.PlaybackReady) }
     }
 
-    BackHandler(enabled = contextChannel != null || contextProgram != null || overlay != null || showInfoBar) {
-        when {
-            contextProgram != null -> contextProgram = null
-            contextChannel != null -> contextChannel = null
-            overlay == LiveOverlay.Guide -> overlay = LiveOverlay.Channels
-            overlay == LiveOverlay.Channels -> overlay = null
-            showInfoBar -> showInfoBar = false
-        }
-    }
+    BackHandler(enabled = uiState.mode != LiveTvMode.FULLSCREEN_PLAYBACK) { dispatch(LiveTvAction.Back) }
 
+    LaunchedEffect(channels.map { it.id }) { dispatch(LiveTvAction.ChannelsChanged(channels.map { it.id })) }
     LaunchedEffect(selected, channels, livePrefs.liveLastChannelRemoteId) {
         if (channels.isNotEmpty()) {
             val restoredId = livePrefs.liveLastChannelRemoteId
             val restoredChannel = channels.firstOrNull { it.remoteId == restoredId }
-            focusedChannelId = focusedChannelId?.takeIf { id -> channels.any { it.id == id } } ?: restoredChannel?.id ?: channels.firstOrNull()?.id
-            val index = channels.indexOfFirst { it.id == focusedChannelId }.coerceAtLeast(0)
+            val currentId = uiState.focusedChannelId?.takeIf { id -> channels.any { it.id == id } } ?: restoredChannel?.id ?: channels.first().id
+            dispatch(LiveTvAction.FocusChannel(currentId))
+            val index = channels.indexOfFirst { it.id == currentId }.coerceAtLeast(0)
             channelListState.scrollToItem(index)
             guideListState.scrollToItem(index)
             if (activeChannel == null) activeChannel = restoredChannel ?: channels.getOrNull(index)
         }
     }
-    LaunchedEffect(overlay) {
-        if (overlay != null) {
-            delay(LiveTvMotion.focusRestoreDelayMillis)
-            runCatching { if (overlay == LiveOverlay.Guide) guideRequester.requestFocus() else channelRequester.requestFocus() }
+    LaunchedEffect(uiState.mode) {
+        delay(LiveTvMotion.focusRestoreDelayMillis)
+        runCatching {
+            when (uiState.mode) {
+                LiveTvMode.CATEGORY_PANEL_VISIBLE -> categoryRequester.requestFocus()
+                LiveTvMode.CHANNEL_LIST_VISIBLE -> channelRequester.requestFocus()
+                LiveTvMode.EPG_VISIBLE -> guideRequester.requestFocus()
+                else -> Unit
+            }
         }
     }
-    LaunchedEffect(showInfoBar, activeChannel?.id) {
-        if (showInfoBar && overlay == null && contextChannel == null && contextProgram == null) {
+    LaunchedEffect(uiState.mode, activeChannel?.id) {
+        if (uiState.mode == LiveTvMode.PROGRAM_INFO_VISIBLE) {
             delay(livePrefs.liveControlsTimeoutMs.coerceIn(4_000L, 6_000L))
-            showInfoBar = false
+            dispatch(LiveTvAction.Back)
         }
     }
 
@@ -243,109 +244,56 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        WindowInsetsControllerCompat(window, view).apply {
-            hide(WindowInsetsCompat.Type.systemBars())
-            systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
+        WindowInsetsControllerCompat(window, view).apply { hide(WindowInsetsCompat.Type.systemBars()); systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE }
     }
 
-    BoxWithConstraints(
-        Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            .onKeyEvent { event ->
-                if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-                when (event.key) {
-                    Key.DirectionLeft -> { overlay = LiveOverlay.Channels; showInfoBar = false; true }
-                    Key.DirectionRight -> { overlay = LiveOverlay.Guide; showInfoBar = false; true }
-                    Key.DirectionUp -> { channels.previousFrom(activeChannel)?.let(::playInPlace); true }
-                    Key.DirectionDown -> { channels.nextFrom(activeChannel)?.let(::playInPlace); true }
-                    Key.DirectionCenter, Key.Enter -> { if (overlay == null) { showInfoBar = !showInfoBar; true } else { focusedChannel?.let(::playInPlace); true } }
-                    Key.Menu -> { focusedChannel?.let { contextChannel = it }; true }
-                    else -> false
-                }
-            },
-    ) {
+    BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black).onKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        val action = RemoteActionMapper.map(event, RemoteActionMapper.surfaceFor(uiState.mode)) ?: return@onKeyEvent false
+        val before = uiState.mode
+        when (action) {
+            LiveTvAction.Ok -> if (before == LiveTvMode.CHANNEL_LIST_VISIBLE || before == LiveTvMode.EPG_VISIBLE || before == LiveTvMode.RECENT_CHANNELS_VISIBLE) focusedChannel?.let(::playInPlace) ?: dispatch(action) else dispatch(action)
+            LiveTvAction.LongOk -> { contextChannel = contextSource; contextProgram = null; dispatch(action) }
+            LiveTvAction.ZapUp -> channels.previousFrom(videoChannel)?.let(::playInPlace) ?: dispatch(action)
+            LiveTvAction.ZapDown -> channels.nextFrom(videoChannel)?.let(::playInPlace) ?: dispatch(action)
+            else -> dispatch(action)
+        }
+        true
+    }) {
         val formFactor = liveTvFormFactor(maxWidth)
         LiveBackgroundPlayer(channel = videoChannel, locked = lockedKey(videoChannel) in locked, vm = vm)
-        if (overlay != null) Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
-        Crossfade(targetState = overlay, animationSpec = tween(LiveTvMotion.panelCrossfadeMillis), label = "live-overlay") { current ->
-            if (current == LiveOverlay.Channels) {
-                Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+        if (uiState.mode != LiveTvMode.FULLSCREEN_PLAYBACK && uiState.mode != LiveTvMode.PROGRAM_INFO_VISIBLE) Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
+        Crossfade(targetState = uiState.mode, animationSpec = tween(LiveTvMotion.panelCrossfadeMillis), label = "live-state-layer") { mode ->
+            when (mode) {
+                LiveTvMode.CHANNEL_LIST_VISIBLE -> Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                    Box(Modifier.width(520.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.92f), LiveTvShapes.panel).padding(18.dp)) {
+                        ChannelListOverlay(channels, uiState.focusedChannelId, categoryTitle, channelRequester, channelListState, nowNext, locked, showNumbers, favorites, activeChannel?.id, Modifier.fillMaxSize(), { ch -> dispatch(LiveTvAction.FocusChannel(ch.id)) }, { dispatch(LiveTvAction.Dpad(LiveTvDirection.LEFT)) }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
+                    }
+                    LiveNowPanel(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, Modifier.weight(1f).fillMaxHeight(), onGuide = { dispatch(LiveTvAction.OpenPanel(LiveTvMode.EPG_VISIBLE)) })
+                }
+                LiveTvMode.CATEGORY_PANEL_VISIBLE -> Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     Box(Modifier.width(330.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.94f), LiveTvShapes.panel).padding(18.dp)) {
                         RootNavigationRail(formFactor, Modifier.align(Alignment.CenterStart))
-                        PlaylistPanel(categories, selected, categoryRequester, categoryListState, Modifier.padding(start = 16.dp).fillMaxSize()) { id -> vm.selectCategory(id) }
+                        PlaylistPanel(categories, selected, categoryRequester, categoryListState, Modifier.padding(start = 16.dp).fillMaxSize()) { id -> vm.selectCategory(id); dispatch(LiveTvAction.SelectGroup(id, channels.firstOrNull()?.id)) }
                     }
-                    Box(Modifier.width(520.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.92f), LiveTvShapes.panel).padding(18.dp)) {
-                        ChannelListOverlay(
-                            channels = channels,
-                            focusedId = focusedChannelId,
-                            categoryTitle = categoryTitle,
-                            requester = channelRequester,
-                            state = channelListState,
-                            nowNext = nowNext,
-                            locked = locked,
-                            showNumbers = showNumbers,
-                            favorites = favorites,
-                            activeId = activeChannel?.id,
-                            modifier = Modifier.fillMaxSize(),
-                            onFocus = { ch -> focusedChannelId = ch.id },
-                            onBackToCategories = { categoryRequester.requestFocus() },
-                            onChannelClick = ::playInPlace,
-                            onOpenMenu = { contextChannel = it },
-                        )
+                    Box(Modifier.width(520.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.72f), LiveTvShapes.panel).padding(18.dp)) {
+                        ChannelListOverlay(channels, uiState.focusedChannelId, categoryTitle, channelRequester, channelListState, nowNext, locked, showNumbers, favorites, activeChannel?.id, Modifier.fillMaxSize(), { ch -> dispatch(LiveTvAction.FocusChannel(ch.id)) }, { }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
                     }
-                    LiveNowPanel(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, Modifier.weight(1f).fillMaxHeight(), onGuide = { overlay = LiveOverlay.Guide })
                 }
-            } else if (current == LiveOverlay.Guide) {
-                EpgOverlayGuide(
-                    channels = channels,
-                    activeId = activeChannel?.id,
-                    focusedId = focusedChannelId,
-                    nowNext = nowNext,
-                    favorites = favorites,
-                    locked = locked,
-                    requester = guideRequester,
-                    state = guideListState,
-                    onFocus = { focusedChannelId = it.id },
-                    onPlay = ::playInPlace,
-                    onProgramMenu = { contextProgram = it },
-                    onChannelMenu = { contextChannel = it },
-                    modifier = Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical),
-                )
+                LiveTvMode.EPG_VISIBLE -> EpgOverlayGuide(channels, activeChannel?.id, uiState.focusedChannelId, nowNext, favorites, locked, guideRequester, guideListState, { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextProgram = it; contextChannel = channels.firstOrNull { ch -> ch.id == it.channelId }; dispatch(LiveTvAction.LongOk) }, { contextChannel = it; dispatch(LiveTvAction.LongOk) }, Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical))
+                else -> Unit
             }
         }
-        AnimatedVisibility(
-            visible = showInfoBar && overlay == null,
-            enter = slideInVertically(initialOffsetY = { it }),
-            exit = slideOutVertically(targetOffsetY = { it }),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            LiveChannelInfoBar(
-                channel = videoChannel,
-                epg = nowNext[videoChannel?.id],
-                locked = lockedKey(videoChannel) in locked,
-                favorite = videoChannel?.remoteId in favorites,
-                resolving = resolving,
-                modifier = Modifier.fillMaxWidth().fillMaxHeight(0.32f),
-            )
+        AnimatedVisibility(visible = uiState.mode == LiveTvMode.PROGRAM_INFO_VISIBLE, enter = slideInVertically(initialOffsetY = { it }), exit = slideOutVertically(targetOffsetY = { it }), modifier = Modifier.align(Alignment.BottomCenter)) {
+            LiveChannelInfoBar(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, videoChannel?.remoteId in favorites, resolving || uiState.playerState.isLoading, Modifier.fillMaxWidth().fillMaxHeight(0.32f))
+        }
+        if (uiState.mode == LiveTvMode.CONTEXT_MENU_VISIBLE) {
+            contextProgram?.let { program -> ProgramContextMenu(program, { videoChannel?.let { vm.addReminder(it, program) } }, { dispatch(LiveTvAction.Back) }) } ?: contextSource?.let { ch ->
+                ChannelContextMenu(ch, lockedKey(ch) in locked, ch.remoteId in favorites, nowNext[ch.id]?.first, { vm.toggleFavorite(ch) }, { vm.toggleLock(ch) }, { playInPlace(ch); dispatch(LiveTvAction.Back) }, { dispatch(LiveTvAction.Back) })
+            }
         }
     }
-    contextChannel?.let { ch ->
-        ChannelContextMenu(
-            channel = ch,
-            locked = lockedKey(ch) in locked,
-            favorite = ch.remoteId in favorites,
-            now = nowNext[ch.id]?.first,
-            onToggleFavorite = { vm.toggleFavorite(ch) },
-            onToggleLock = { vm.toggleLock(ch) },
-            onPlay = { playInPlace(ch); contextChannel = null },
-            onDismiss = { contextChannel = null },
-        )
-    }
-    contextProgram?.let { program -> ProgramContextMenu(program = program, onReminder = { videoChannel?.let { vm.addReminder(it, program) } }, onDismiss = { contextProgram = null }) }
 }
-
 private fun lockedKey(ch: ChannelEntity?) = ch?.let { "${it.providerId}:${it.remoteId}" } ?: ""
 
 @Composable
@@ -400,8 +348,8 @@ private fun EpgGuide(now: EpgEntity?) {
 @Composable
 private fun ProgramContextMenu(program: EpgEntity?, onReminder: () -> Unit, onDismiss: () -> Unit) {
     BackHandler { onDismiss() }
-    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(380.dp).background(LiveTvColors.surface, LiveTvShapes.menu).border(1.dp, LiveTvColors.outlineStrong, LiveTvShapes.menu).padding(18.dp)) {
+    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.38f)), contentAlignment = Alignment.CenterEnd) {
+        Column(Modifier.fillMaxHeight().width(380.dp).background(LiveTvColors.surface, LiveTvShapes.menu).border(1.dp, LiveTvColors.outlineStrong, LiveTvShapes.menu).padding(18.dp)) {
             Text(program?.title ?: "Programa sin información", color = LiveTvColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Text(program?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: "Sin horario disponible", color = LiveTvColors.textMuted, fontSize = 13.sp)
@@ -695,8 +643,8 @@ private fun StreamStatusIndicator(locked: Boolean, focused: Boolean) { Box(Modif
 @Composable
 private fun ChannelContextMenu(channel: ChannelEntity, locked: Boolean, favorite: Boolean, now: EpgEntity?, onToggleFavorite: () -> Unit, onToggleLock: () -> Unit, onPlay: () -> Unit, onDismiss: () -> Unit) {
     BackHandler { onDismiss() }
-    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim), contentAlignment = Alignment.Center) {
-        Column(Modifier.width(LiveTvDimensions.contextMenuWidth).background(LiveTvColors.surface, RoundedCornerShape(18.dp)).border(1.dp, LiveTvColors.outlineStrong, RoundedCornerShape(18.dp)).padding(18.dp)) {
+    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.38f)), contentAlignment = Alignment.CenterEnd) {
+        Column(Modifier.fillMaxHeight().width(LiveTvDimensions.contextMenuWidth).background(LiveTvColors.surface, RoundedCornerShape(18.dp)).border(1.dp, LiveTvColors.outlineStrong, RoundedCornerShape(18.dp)).padding(18.dp)) {
             Text(channel.name, color = LiveTvColors.textPrimary, fontSize = 20.sp, fontFamily = UltraFonts.Serif)
             Text(now?.title ?: "Sin programa actual", color = LiveTvColors.textMuted, fontSize = 13.sp, maxLines = 2)
             Spacer(Modifier.height(14.dp))

@@ -90,4 +90,30 @@ class LiveTvReducerTest {
         assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, menu.openedFromMode)
         assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, restored.mode)
     }
+
+    @Test fun focusMovementDoesNotChangePlayingChannel() {
+        val state = LiveTvUiState(
+            mode = LiveTvMode.CHANNEL_LIST_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 10L,
+            selectedChannelId = 10L,
+            playingChannelId = 30L,
+        )
+
+        val moved = LiveTvReducer.reduce(state, LiveTvAction.Dpad(LiveTvDirection.DOWN))
+
+        assertEquals(20L, moved.focusedChannelId)
+        assertEquals(30L, moved.playingChannelId)
+    }
+
+    @Test fun backFromCategoriesClosesOnlyCategoriesBeforeChannels() {
+        val categories = LiveTvUiState(mode = LiveTvMode.CATEGORY_PANEL_VISIBLE, channelIds = channels)
+
+        val channelsLayer = LiveTvReducer.reduce(categories, LiveTvAction.Back)
+        val fullscreen = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, channelsLayer.mode)
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
+    }
+
 }
