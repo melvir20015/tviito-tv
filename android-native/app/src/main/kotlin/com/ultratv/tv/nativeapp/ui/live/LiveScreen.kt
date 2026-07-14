@@ -79,6 +79,9 @@ import com.ultratv.tv.nativeapp.ui.common.ChannelLogo
 import com.ultratv.tv.nativeapp.ui.common.prettyCategoryName
 import com.ultratv.tv.nativeapp.ui.theme.UltraFonts
 import com.ultratv.tv.nativeapp.ui.theme.UltraTokens
+import com.ultratv.tv.nativeapp.ui.live.guide.EpgGuide as TimelineEpgGuide
+import com.ultratv.tv.nativeapp.ui.live.guide.EpgProgramAction
+import com.ultratv.tv.nativeapp.ui.live.guide.epgProgramAction
 import com.ultratv.tv.nativeapp.ui.live.remote.RemoteActionMapper
 import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
@@ -169,6 +172,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val selected by vm.selectedCategory.collectAsState()
     val locked by vm.lockedChannels.collectAsState()
     val nowNext by vm.nowNext.collectAsState()
+    val guidePrograms by vm.guidePrograms.collectAsState()
     val showNumbers by vm.showChannelNumbers.collectAsState()
     val favorites by vm.favoriteRemoteIds.collectAsState()
     val s = com.ultratv.tv.nativeapp.i18n.LocalStrings.current
@@ -185,6 +189,9 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val categoryListState = rememberLazyListState()
     val channelListState = rememberLazyListState()
     val guideListState = rememberLazyListState()
+    var guideWindowStartMs by remember { mutableStateOf(0L) }
+    var guideWindowEndMs by remember { mutableStateOf(0L) }
+    var guideNowMs by remember { mutableStateOf(System.currentTimeMillis()) }
     fun dispatch(action: LiveTvAction) { uiState = LiveTvReducer.reduce(uiState, action) }
 
     val categories = remember(realCats, selected, channels.size) {
@@ -234,6 +241,15 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                 LiveTvMode.RECENT_CHANNELS_VISIBLE -> recentRequester.requestFocus()
                 else -> Unit
             }
+        }
+    }
+    LaunchedEffect(uiState.mode, channels.map { it.id }) {
+        if (uiState.mode == LiveTvMode.EPG_VISIBLE) {
+            val now = System.currentTimeMillis()
+            guideNowMs = now
+            guideWindowStartMs = now - 60 * 60_000L
+            guideWindowEndMs = now + 5 * 60 * 60_000L
+            vm.loadGuidePrograms(channels, guideWindowStartMs, guideWindowEndMs)
         }
     }
     LaunchedEffect(uiState.mode, activeChannel?.id) {
@@ -287,7 +303,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                         ChannelListOverlay(channels, uiState.focusedChannelId, categoryTitle, channelRequester, channelListState, nowNext, locked, showNumbers, favorites, activeChannel?.id, Modifier.fillMaxSize(), { ch -> dispatch(LiveTvAction.FocusChannel(ch.id)) }, { }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
                     }
                 }
-                LiveTvMode.EPG_VISIBLE -> EpgOverlayGuide(channels, activeChannel?.id, uiState.focusedChannelId, nowNext, favorites, locked, guideRequester, guideListState, { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextProgram = it; contextChannel = channels.firstOrNull { ch -> ch.id == it.channelId }; dispatch(LiveTvAction.LongOk) }, { contextChannel = it; dispatch(LiveTvAction.LongOk) }, Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical))
+                LiveTvMode.EPG_VISIBLE -> EpgOverlayGuide(channels, activeChannel?.id, uiState.focusedChannelId, guidePrograms, guideWindowStartMs, guideWindowEndMs, guideNowMs, favorites, locked, guideRequester, { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextProgram = it; contextChannel = channels.firstOrNull { ch -> ch.id == it.channelId }; dispatch(LiveTvAction.LongOk) }, { contextChannel = it; dispatch(LiveTvAction.LongOk) }, Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical))
                 LiveTvMode.RECENT_CHANNELS_VISIBLE -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
                     RecentChannelsOverlay(recentChannels, uiState.focusedChannelId, activeChannel?.id, recentRequester, nowNext, locked, favorites, showNumbers, Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 34.dp), { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
                 }
@@ -661,18 +677,37 @@ private fun LiveNowPanel(channel: ChannelEntity?, epg: Pair<EpgEntity?, EpgEntit
 }
 
 @Composable
-private fun EpgOverlayGuide(channels: List<ChannelEntity>, activeId: Long?, focusedId: Long?, nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>, favorites: Set<String>, locked: Set<String>, requester: FocusRequester, state: LazyListState, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onProgramMenu: (EpgEntity) -> Unit, onChannelMenu: (ChannelEntity) -> Unit, modifier: Modifier = Modifier) {
+private fun EpgOverlayGuide(channels: List<ChannelEntity>, activeId: Long?, focusedId: Long?, programsByChannel: Map<Long, List<EpgEntity>>, windowStartMs: Long, windowEndMs: Long, nowMs: Long, favorites: Set<String>, locked: Set<String>, requester: FocusRequester, onFocus: (ChannelEntity) -> Unit, onPlay: (ChannelEntity) -> Unit, onProgramMenu: (EpgEntity) -> Unit, onChannelMenu: (ChannelEntity) -> Unit, modifier: Modifier = Modifier) {
     Column(modifier.background(LiveTvColors.surface.copy(alpha = 0.94f), LiveTvShapes.panel).padding(18.dp).focusRequester(requester)) {
         Text("Guía EPG", color = LiveTvColors.textPrimary, fontFamily = UltraFonts.Serif, fontSize = 32.sp)
-        Text("Video persistente · OK reproduce · Menú abre acciones · Back vuelve a canales", color = LiveTvColors.textMuted, fontSize = 12.sp)
+        Text("Video persistente · OK reproduce el programa actual · Programas pasados/futuros abren acciones · Back vuelve a canales", color = LiveTvColors.textMuted, fontSize = 12.sp)
         Spacer(Modifier.height(14.dp))
-        EpgTimeHeader()
-        Spacer(Modifier.height(8.dp))
-        if (channels.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canales disponibles.", color = LiveTvColors.textMuted) } else LazyColumn(state = state, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(channels, key = { it.id }) { ch ->
-                val pair = nowNext[ch.id]
-                EpgGuideRow(ch, channels.indexOf(ch) + 1, activeId == ch.id, focusedId == ch.id, ch.remoteId in favorites, lockedKey(ch) in locked, pair?.first, pair?.second, onFocus, onPlay, onProgramMenu, onChannelMenu)
-            }
+        if (channels.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No hay canales disponibles.", color = LiveTvColors.textMuted) }
+        } else if (windowStartMs >= windowEndMs) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Cargando guía EPG…", color = LiveTvColors.textMuted) }
+        } else {
+            TimelineEpgGuide(
+                channels = channels,
+                programsByChannel = programsByChannel,
+                windowStartMs = windowStartMs,
+                windowEndMs = windowEndMs,
+                nowMs = nowMs,
+                selectedProgramId = focusedId?.let { programsByChannel[it] }.orEmpty().firstOrNull { nowMs in it.startMs until it.endMs }?.id,
+                playingChannelId = activeId,
+                favoriteChannelIds = channels.filter { it.remoteId in favorites }.map { it.id }.toSet(),
+                onChannelFocus = onFocus,
+                onProgramFocus = { channel, _ -> onFocus(channel) },
+                onPlayChannel = { channel, program ->
+                    when (program?.let { epgProgramAction(it.startMs, it.endMs, nowMs) }) {
+                        EpgProgramAction.PAST, EpgProgramAction.FUTURE -> onProgramMenu(program)
+                        EpgProgramAction.CURRENT, null -> onPlay(channel)
+                    }
+                },
+                onOpenChannelMenu = onChannelMenu,
+                onOpenProgramMenu = onProgramMenu,
+                modifier = Modifier.fillMaxSize(),
+            )
         }
     }
 }

@@ -69,7 +69,7 @@ object EpgGuideReducer {
     private fun EpgGuideUiState.moveChannel(step: Int): EpgGuideUiState {
         if (channelIds.isEmpty()) return this
         val next = (focusedChannelIndex + step).coerceIn(channelIds.indices)
-        return copy(focusedChannelIndex = next).coerceFocus()
+        return copy(focusedChannelIndex = next, focusedProgramIndex = horizontalWindowOffset).coerceFocus()
     }
 
     private fun EpgGuideUiState.moveProgram(step: Int): EpgGuideUiState {

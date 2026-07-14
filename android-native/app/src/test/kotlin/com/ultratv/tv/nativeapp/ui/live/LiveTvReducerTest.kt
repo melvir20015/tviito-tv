@@ -179,4 +179,34 @@ class LiveTvReducerTest {
         assertEquals(20L, restoredGuide.focusedChannelId)
     }
 
+    @Test fun epgConservaFocoTemporalAlCambiarCanalYVolverACapas() {
+        val guide = LiveTvUiState(
+            mode = LiveTvMode.EPG_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 20L,
+            epgHorizontalOffsetMs = 90 * 60_000L,
+        )
+
+        val moved = LiveTvReducer.reduce(guide, LiveTvAction.Dpad(LiveTvDirection.DOWN))
+        val channelsLayer = LiveTvReducer.reduce(moved, LiveTvAction.Back)
+        val restoredGuide = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+
+        assertEquals(30L, moved.focusedChannelId)
+        assertEquals(90 * 60_000L, moved.epgHorizontalOffsetMs)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, channelsLayer.mode)
+        assertEquals(LiveTvMode.EPG_VISIBLE, restoredGuide.mode)
+        assertEquals(30L, restoredGuide.focusedChannelId)
+        assertEquals(90 * 60_000L, restoredGuide.epgHorizontalOffsetMs)
+    }
+
+    @Test fun backDesdeEpgCierraUnaSolaCapaAntesDePantallaCompleta() {
+        val guide = LiveTvUiState(mode = LiveTvMode.EPG_VISIBLE, channelIds = channels)
+
+        val channelsLayer = LiveTvReducer.reduce(guide, LiveTvAction.Back)
+        val fullscreen = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, channelsLayer.mode)
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
+    }
+
 }

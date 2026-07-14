@@ -27,6 +27,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -64,6 +69,8 @@ fun EpgGuide(
     onChannelFocus: (ChannelEntity) -> Unit = {},
     onProgramFocus: (ChannelEntity, EpgEntity?) -> Unit = { _, _ -> },
     onPlayChannel: (ChannelEntity, EpgEntity?) -> Unit,
+    onOpenChannelMenu: (ChannelEntity) -> Unit = {},
+    onOpenProgramMenu: (EpgEntity) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val hScroll = rememberScrollState()
@@ -86,6 +93,8 @@ fun EpgGuide(
                     selectedProgramId = selectedProgramId,
                     onChannelFocus = { onChannelFocus(channel) },
                     onProgramFocus = { onProgramFocus(channel, it) },
+                    onOpenChannelMenu = { onOpenChannelMenu(channel) },
+                    onOpenProgramMenu = onOpenProgramMenu,
                     onPlay = { onPlayChannel(channel, it) },
                 )
             }
@@ -141,13 +150,15 @@ fun EpgChannelRow(
     selectedProgramId: Long?,
     onChannelFocus: () -> Unit,
     onProgramFocus: (EpgEntity?) -> Unit,
+    onOpenChannelMenu: () -> Unit,
+    onOpenProgramMenu: (EpgEntity) -> Unit,
     onPlay: (EpgEntity?) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Row(modifier.fillMaxWidth().height(RowHeight), verticalAlignment = Alignment.CenterVertically) {
         Card(
             onClick = { onPlay(null) },
-            modifier = Modifier.width(ChannelWidth).fillMaxHeight().padding(end = 8.dp, bottom = 4.dp).onFocusChanged { if (it.isFocused) onChannelFocus() },
+            modifier = Modifier.width(ChannelWidth).fillMaxHeight().padding(end = 8.dp, bottom = 4.dp).onFocusChanged { if (it.isFocused) onChannelFocus() }.onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onOpenChannelMenu(); true } else false },
             shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
             colors = ultraCardColors(containerColor = if (isPlaying) UltraTokens.AccentSoft else UltraTokens.Surface1, focusedContainerColor = UltraTokens.Accent),
         ) {
@@ -178,6 +189,7 @@ fun EpgChannelRow(
                         recordingPlaceholder = false,
                         reminderPlaceholder = false,
                         onFocus = { onProgramFocus(block.program) },
+                        onOpenMenu = { block.program?.let(onOpenProgramMenu) },
                         onClick = { onPlay(block.program) },
                     )
                 }
@@ -201,6 +213,7 @@ fun EpgProgramCell(
     recordingPlaceholder: Boolean,
     reminderPlaceholder: Boolean,
     onFocus: () -> Unit,
+    onOpenMenu: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -226,6 +239,7 @@ fun EpgProgramCell(
             .fillMaxHeight()
             .padding(top = 4.dp, bottom = 4.dp, end = 3.dp)
             .onFocusChanged { if (it.isFocused) onFocus() }
+            .onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onOpenMenu(); true } else false }
             .then(if (selected) Modifier.border(2.dp, UltraTokens.Accent, RoundedCornerShape(10.dp)) else Modifier),
         shape = CardDefaults.shape(RoundedCornerShape(10.dp)),
         colors = ultraCardColors(containerColor = color, focusedContainerColor = UltraTokens.Accent, focusedContentColor = Color.White),
@@ -282,3 +296,12 @@ private fun timeWidth(startMs: Long, endMs: Long): Dp = (((endMs - startMs).coer
 private fun halfHourSlots(windowStartMs: Long, windowEndMs: Long): List<Long> = generateSequence(windowStartMs) { it + 30 * 60_000L }.takeWhile { it < windowEndMs }.toList()
 private val guideTimeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 private fun formatGuideTime(ms: Long): String = guideTimeFormat.format(Date(ms))
+
+
+enum class EpgProgramAction { PAST, CURRENT, FUTURE }
+
+fun epgProgramAction(startMs: Long, endMs: Long, nowMs: Long): EpgProgramAction = when {
+    nowMs >= endMs -> EpgProgramAction.PAST
+    nowMs in startMs until endMs -> EpgProgramAction.CURRENT
+    else -> EpgProgramAction.FUTURE
+}

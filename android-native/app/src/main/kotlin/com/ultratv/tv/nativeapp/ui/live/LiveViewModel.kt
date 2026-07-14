@@ -155,6 +155,9 @@ class LiveViewModel @Inject constructor(
     private val _nowNext = MutableStateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>>(emptyMap())
     val nowNext: StateFlow<Map<Long, Pair<com.ultratv.tv.nativeapp.data.db.EpgEntity?, com.ultratv.tv.nativeapp.data.db.EpgEntity?>>> = _nowNext.asStateFlow()
 
+    private val _guidePrograms = MutableStateFlow<Map<Long, List<com.ultratv.tv.nativeapp.data.db.EpgEntity>>>(emptyMap())
+    val guidePrograms: StateFlow<Map<Long, List<com.ultratv.tv.nativeapp.data.db.EpgEntity>>> = _guidePrograms.asStateFlow()
+
     val favoriteRemoteIds: StateFlow<Set<String>> = combine(providers, _selectedCategory) { ps, _ ->
         ps.firstOrNull { it.active }?.id ?: ps.firstOrNull()?.id
     }.flatMapLatest { pid ->
@@ -202,6 +205,21 @@ class LiveViewModel @Inject constructor(
             val nextProg = list.firstOrNull { it.startMs > now }
             nowProg to nextProg
         }
+    }
+
+    suspend fun loadGuidePrograms(
+        channels: List<ChannelEntity>,
+        windowStartMs: Long,
+        windowEndMs: Long,
+    ) {
+        if (channels.isEmpty()) {
+            _guidePrograms.value = emptyMap()
+            return
+        }
+        val rows = channels.map { it.id }.chunked(500).flatMap { chunk ->
+            epgDao.rangeForChannels(chunk, windowStartMs, windowEndMs)
+        }
+        _guidePrograms.value = rows.groupBy { it.channelId }
     }
 
     fun toggleLock(channel: ChannelEntity) {

@@ -57,4 +57,18 @@ class EpgGuideReducerTest {
         assertEquals(EpgFocusLayer.GROUP, group.focusLayer)
         assertEquals(EpgFocusLayer.PROGRAM_CELL, program.focusLayer)
     }
+    @Test fun navegacionVerticalConservaIndiceHorizontalDisponible() {
+        val secondRowSecondProgram = EpgGuideReducer.reduce(
+            state.copy(focusedChannelIndex = 1, focusedProgramIndex = 1),
+            EpgGuideAction.Dpad(EpgGuideDirection.DOWN),
+        )
+        val backToSecondRow = EpgGuideReducer.reduce(secondRowSecondProgram, EpgGuideAction.Dpad(EpgGuideDirection.UP))
+
+        assertEquals(30L, secondRowSecondProgram.focusedChannelId)
+        assertEquals(301L, secondRowSecondProgram.focusedProgramId)
+        assertEquals(1, secondRowSecondProgram.horizontalWindowOffset)
+        assertEquals(20L, backToSecondRow.focusedChannelId)
+        assertEquals(202L, backToSecondRow.focusedProgramId)
+    }
+
 }
