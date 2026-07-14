@@ -95,6 +95,38 @@ class XtreamClientTest {
     }
 
     @Test
+    fun fetchLiveStreams_conAvisoPhpAntesDelJson_parseaArrayValido() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setHeader("Content-Type", "text/plain; charset=utf-8")
+                .setBody("""
+                    Warning: Undefined array key "action" in /var/www/html/player_api.php on line 12
+                    [{"stream_id":"10","name":"Canal PHP","category_id":"1"}]
+                """.trimIndent())
+        )
+
+        val result = client.fetchLiveStreams(provider)
+
+        assertEquals(1, result.size)
+        assertEquals("Canal PHP", result.single().name)
+        assertEquals("10", result.single().remoteId)
+    }
+
+    @Test
+    fun extractJsonPayload_conTextoAntesYDespues_devuelveJsonBalanceado() {
+        val body = """
+            aviso previo
+            {"user_info":{"auth":1,"message":"texto con } dentro"},"server_info":{}}
+            basura posterior
+        """.trimIndent()
+
+        assertEquals(
+            """{"user_info":{"auth":1,"message":"texto con } dentro"},"server_info":{}}""",
+            XtreamUrlTools.extractJsonPayload(body),
+        )
+    }
+
+    @Test
     fun fetchLiveStreams_conObjetoDeEstado_lanzaErrorComprensible() = runBlocking {
         server.enqueue(MockResponse().setBody("""
             {"message":"Invalid username or password","auth":0}

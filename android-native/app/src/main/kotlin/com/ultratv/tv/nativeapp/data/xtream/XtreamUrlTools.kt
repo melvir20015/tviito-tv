@@ -58,6 +58,46 @@ object XtreamUrlTools {
         return null
     }
 
+    /**
+     * Algunos paneles Xtream detrás de PHP/proxies devuelven avisos o texto plano
+     * alrededor del JSON válido. Este helper conserva el camino estricto para
+     * respuestas limpias y solo recorta cuando encuentra un objeto/arreglo JSON
+     * balanceado dentro del cuerpo. No registra ni expone credenciales.
+     */
+    fun extractJsonPayload(body: String): String? {
+        val trimmed = body.trim()
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed
+        val start = body.indexOfFirst { it == '{' || it == '[' }
+        if (start < 0) return null
+        val opening = body[start]
+        val closing = if (opening == '{') '}' else ']'
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (index in start until body.length) {
+            val char = body[index]
+            if (escaped) {
+                escaped = false
+                continue
+            }
+            if (char == '\\' && inString) {
+                escaped = true
+                continue
+            }
+            if (char == '"') {
+                inString = !inString
+                continue
+            }
+            if (inString) continue
+            if (char == opening) depth++
+            if (char == closing) {
+                depth--
+                if (depth == 0) return body.substring(start, index + 1).trim()
+            }
+        }
+        return null
+    }
+
     private fun looksLikeHtml(sample: String): Boolean {
         val lower = sample.lowercase()
         return lower.startsWith("<!doctype") || lower.startsWith("<html") || lower.startsWith("<head") ||

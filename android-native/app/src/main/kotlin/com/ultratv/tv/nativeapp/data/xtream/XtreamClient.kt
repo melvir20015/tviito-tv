@@ -227,8 +227,10 @@ class XtreamClient @Inject constructor(private val ok: OkHttpClient) {
     private suspend fun fetchJson(p: ProviderEntity, action: String?): JsonElement {
         val response = get(buildApiUrl(p, action))
         XtreamUrlTools.classifyNonJsonResponse(response.body, response.contentType)?.let { throw it }
+        val payload = XtreamUrlTools.extractJsonPayload(response.body)
+            ?: throw XtreamException.InvalidJson()
         return try {
-            json.parseToJsonElement(response.body)
+            json.parseToJsonElement(payload)
         } catch (_: Throwable) {
             throw XtreamException.InvalidJson()
         }
