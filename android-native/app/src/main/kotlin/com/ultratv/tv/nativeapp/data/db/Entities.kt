@@ -13,6 +13,10 @@ data class ProviderEntity(
     val username: String,
     val password: String,
     val active: Boolean = true,
+    /** Zona IANA de origen para XMLTV sin offset explícito, por ejemplo Europe/Madrid. */
+    val epgSourceZoneId: String? = null,
+    /** Ajuste manual adicional del EPG del proveedor, en minutos. */
+    val epgManualOffsetMinutes: Int = 0,
 )
 
 @Entity(
@@ -50,6 +54,10 @@ data class ChannelEntity(
     /** User-defined display position. 0 = natural provider order. >0 pins or
      *  manually places the channel ahead of the provider-ordered block. */
     val userPosition: Int = 0,
+    /** Zona IANA de origen específica del canal; tiene prioridad sobre la del proveedor. */
+    val epgSourceZoneId: String? = null,
+    /** Ajuste manual adicional del canal; si es distinto de 0, tiene prioridad sobre el proveedor. */
+    val epgManualOffsetMinutes: Int = 0,
 )
 
 @Entity(tableName = "category", indices = [Index(value = ["providerId", "kind", "providerPosition"]), Index(value = ["providerId", "kind", "remoteId"], unique = true)])

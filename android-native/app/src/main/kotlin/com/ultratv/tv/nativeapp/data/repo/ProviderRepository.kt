@@ -11,6 +11,7 @@ import com.ultratv.tv.nativeapp.data.db.SeriesDao
 import com.ultratv.tv.nativeapp.data.m3u.M3uParser
 import com.ultratv.tv.nativeapp.data.parental.ParentalStore
 import com.ultratv.tv.nativeapp.data.stalker.StalkerClient
+import com.ultratv.tv.nativeapp.data.xmltv.EpgTimeRule
 import com.ultratv.tv.nativeapp.data.xmltv.XmltvParser
 import com.ultratv.tv.nativeapp.data.xtream.XtreamClient
 import com.ultratv.tv.nativeapp.data.xtream.XtreamUrlTools
@@ -209,12 +210,22 @@ class ProviderRepository @Inject constructor(
             val map = all
                 .mapNotNull { ch -> ch.epgChannelId?.takeIf { it.isNotBlank() }?.let { it to ch.id } }
                 .toMap()
+            val channelTimeRules = all
+                .mapNotNull { ch ->
+                    ch.epgChannelId?.takeIf { it.isNotBlank() }?.let { xmltvId ->
+                        xmltvId to EpgTimeRule(
+                            sourceZoneId = ch.epgSourceZoneId,
+                            manualOffsetMinutes = ch.epgManualOffsetMinutes,
+                        )
+                    }
+                }
+                .toMap()
             if (map.isEmpty()) {
                 step("No xmltv channel IDs available for this provider", 100)
                 return 0
             }
             step("Parsing xmltv (matching ${map.size} channels)…", 30)
-            val programmes = xmltv.fetchAndParse(p, map)
+            val programmes = xmltv.fetchAndParse(p, map, channelTimeRules)
             step("Saving ${programmes.size} programmes…", 75)
             epgDao.deleteForProvider(p.id)
             programmes.chunked(500).forEach { epgDao.upsertAll(it) }

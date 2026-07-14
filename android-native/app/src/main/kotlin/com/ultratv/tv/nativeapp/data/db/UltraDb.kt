@@ -14,6 +14,15 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
     }
 }
 
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE provider ADD COLUMN epgSourceZoneId TEXT")
+        db.execSQL("ALTER TABLE provider ADD COLUMN epgManualOffsetMinutes INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE channel ADD COLUMN epgSourceZoneId TEXT")
+        db.execSQL("ALTER TABLE channel ADD COLUMN epgManualOffsetMinutes INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
 @Database(
     entities = [
         ProviderEntity::class,
@@ -28,7 +37,7 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         RecordingEntity::class,
         com.ultratv.tv.nativeapp.data.reminders.ReminderEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = true,
 )
 abstract class UltraDb : RoomDatabase() {

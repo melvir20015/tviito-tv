@@ -9,10 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.xmlpull.v1.XmlPullParser
 import java.io.InputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import java.time.ZoneId
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,26 +27,34 @@ import javax.inject.Singleton
 @Singleton
 class XmltvParser @Inject constructor(private val ok: OkHttpClient) {
 
-    private val xmltvDateFormats = listOf(
-        // "yyyyMMddHHmmss Z"  e.g.  20251215140000 +0100
-        SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US),
-        SimpleDateFormat("yyyyMMddHHmmss", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") },
-    )
-
     suspend fun fetchAndParse(
         p: ProviderEntity,
         channelXmltvIdToLocalId: Map<String, Long>,
+        channelTimeRulesByXmltvId: Map<String, EpgTimeRule> = emptyMap(),
     ): List<EpgEntity> = withContext(Dispatchers.IO) {
         val url = "${p.baseUrl}/xmltv.php?username=${java.net.URLEncoder.encode(p.username, "UTF-8")}" +
             "&password=${java.net.URLEncoder.encode(p.password, "UTF-8")}"
         ok.newCall(Request.Builder().url(url).build()).execute().use { resp ->
             if (!resp.isSuccessful) error("HTTP ${resp.code} fetching xmltv")
             val stream = resp.body?.byteStream() ?: error("Empty xmltv body")
-            parse(stream, channelXmltvIdToLocalId)
+            parse(
+                input = stream,
+                channelMap = channelXmltvIdToLocalId,
+                providerTimeRule = EpgTimeRule(
+                    sourceZoneId = p.epgSourceZoneId,
+                    manualOffsetMinutes = p.epgManualOffsetMinutes,
+                ),
+                channelTimeRulesByXmltvId = channelTimeRulesByXmltvId,
+            )
         }
     }
 
-    fun parse(input: InputStream, channelMap: Map<String, Long>): List<EpgEntity> {
+    fun parse(
+        input: InputStream,
+        channelMap: Map<String, Long>,
+        providerTimeRule: EpgTimeRule = EpgTimeRule(sourceZoneId = ZoneId.of("UTC").id),
+        channelTimeRulesByXmltvId: Map<String, EpgTimeRule> = emptyMap(),
+    ): List<EpgEntity> {
         val parser = Xml.newPullParser()
         parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
         parser.setInput(input, null)
@@ -63,8 +68,9 @@ class XmltvParser @Inject constructor(private val ok: OkHttpClient) {
                 if (channelId == null) {
                     skipToEndTag(parser, "programme")
                 } else {
-                    val start = parseDate(parser.getAttributeValue(null, "start"))
-                    val stop = parseDate(parser.getAttributeValue(null, "stop"))
+                    val channelRule = channelTimeRulesByXmltvId[xmltvCh!!].orEmpty()
+                    val start = resolveDate(parser.getAttributeValue(null, "start"), providerTimeRule, channelRule)
+                    val stop = resolveDate(parser.getAttributeValue(null, "stop"), providerTimeRule, channelRule)
                     var title: String? = null
                     var desc: String? = null
                     // Walk children until we close the programme.
@@ -117,12 +123,10 @@ class XmltvParser @Inject constructor(private val ok: OkHttpClient) {
         }
     }
 
-    private fun parseDate(raw: String?): Long? {
-        if (raw.isNullOrBlank()) return null
-        for (fmt in xmltvDateFormats) {
-            val parsed = runCatching { fmt.parse(raw) }.getOrNull()
-            if (parsed != null) return parsed.time
-        }
-        return null
+    private fun resolveDate(raw: String?, providerRule: EpgTimeRule, channelRule: EpgTimeRule): Long? {
+        val parsed = EpgTimeResolver.parseTimestamp(raw) ?: return null
+        return EpgTimeResolver.resolve(parsed, providerRule, channelRule)?.instant?.toEpochMilli()
     }
+
+    private fun EpgTimeRule?.orEmpty(): EpgTimeRule = this ?: EpgTimeRule()
 }
