@@ -71,6 +71,7 @@ data class LiveTvUiState(
     val buttonAssignments: Map<String, String> = emptyMap(),
     val epgHorizontalOffsetMs: Long = 0L,
     val openedFromMode: LiveTvMode? = null,
+    val focusedChannelByMode: Map<LiveTvMode, Long> = emptyMap(),
     val videoSurfaceMode: LiveTvVideoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN,
     val previewState: LiveTvLoadState = LiveTvLoadState(),
     val playerState: LiveTvLoadState = LiveTvLoadState(),
@@ -175,17 +176,17 @@ object LiveTvReducer {
 
     private fun LiveTvUiState.onDpad(direction: LiveTvDirection): LiveTvUiState = when (direction) {
         LiveTvDirection.LEFT -> when (mode) {
-            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
-            LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
-            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> copy(mode = LiveTvMode.CATEGORY_PANEL_VISIBLE)
+            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE)
+            LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE).copy(videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
+            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> switchMode(LiveTvMode.CATEGORY_PANEL_VISIBLE)
             LiveTvMode.CATEGORY_PANEL_VISIBLE -> this
             LiveTvMode.RECENT_CHANNELS_VISIBLE -> moveFocus(step = -1)
             else -> this
         }.ensureValidFocus()
         LiveTvDirection.RIGHT -> when (mode) {
-            LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
-            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> copy(mode = LiveTvMode.EPG_VISIBLE)
-            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> copy(mode = LiveTvMode.EPG_VISIBLE)
+            LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE)
+            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> switchMode(LiveTvMode.EPG_VISIBLE)
+            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> switchMode(LiveTvMode.EPG_VISIBLE)
             LiveTvMode.RECENT_CHANNELS_VISIBLE -> moveFocus(step = 1)
             else -> this
         }.ensureValidFocus()
@@ -199,12 +200,12 @@ object LiveTvReducer {
             mode = LiveTvMode.BUFFERING,
             playerState = LiveTvLoadState(isLoading = true),
         ).rememberFocusedChannel()
-        LiveTvMode.CATEGORY_PANEL_VISIBLE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
-        LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> copy(mode = LiveTvMode.PROGRAM_INFO_VISIBLE)
+        LiveTvMode.CATEGORY_PANEL_VISIBLE -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE)
+        LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> switchMode(LiveTvMode.PROGRAM_INFO_VISIBLE)
         else -> this
     }.ensureValidFocus()
 
-    private fun LiveTvUiState.openContextMenu(): LiveTvUiState = copy(
+    private fun LiveTvUiState.openContextMenu(): LiveTvUiState = rememberFocusedChannelForMode().copy(
         mode = LiveTvMode.CONTEXT_MENU_VISIBLE,
         openedFromMode = mode,
     ).ensureValidFocus()
@@ -213,13 +214,14 @@ object LiveTvReducer {
         LiveTvMode.CONTEXT_MENU_VISIBLE, LiveTvMode.CHANNEL_CONTEXT_MENU, LiveTvMode.PROGRAM_CONTEXT_MENU -> copy(
             mode = openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE,
             openedFromMode = null,
+            focusedChannelId = focusedChannelByMode[openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE] ?: focusedChannelId,
         )
         LiveTvMode.PLAYBACK_ERROR, LiveTvMode.BUFFERING, LiveTvMode.LOADING_CHANNEL -> toFullscreen()
-        LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
-        LiveTvMode.PROGRAM_DETAILS_VISIBLE -> copy(mode = LiveTvMode.EPG_VISIBLE)
-        LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
+        LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE)
+        LiveTvMode.PROGRAM_DETAILS_VISIBLE -> switchMode(LiveTvMode.EPG_VISIBLE)
+        LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE).copy(videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
         LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.RECENT_CHANNELS_VISIBLE, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> toFullscreen()
-        LiveTvMode.PLAYLIST_LIST -> copy(mode = LiveTvMode.CATEGORY_PANEL_VISIBLE)
+        LiveTvMode.PLAYLIST_LIST -> switchMode(LiveTvMode.CATEGORY_PANEL_VISIBLE)
         LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> this
     }.ensureValidFocus()
 
@@ -232,9 +234,38 @@ object LiveTvReducer {
 
     private fun LiveTvUiState.openPanel(newMode: LiveTvMode): LiveTvUiState = copy(
         mode = newMode,
+        focusedChannelId = focusedChannelByMode[newMode] ?: focusedChannelId,
+        focusedChannelByMode = if (mode.isFocusRestorableLayer() && focusedChannelId != null) focusedChannelByMode + (mode to focusedChannelId) else focusedChannelByMode,
         openedFromMode = if (newMode == LiveTvMode.CONTEXT_MENU_VISIBLE || newMode.name.endsWith("CONTEXT_MENU")) mode else openedFromMode,
         videoSurfaceMode = if (newMode == LiveTvMode.FULLSCREEN_PLAYBACK) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
     ).ensureValidFocus()
+
+    private fun LiveTvUiState.switchMode(newMode: LiveTvMode): LiveTvUiState {
+        val remembered = if (mode.isFocusRestorableLayer() && focusedChannelId != null) {
+            focusedChannelByMode + (mode to focusedChannelId)
+        } else {
+            focusedChannelByMode
+        }
+        return copy(
+            mode = newMode,
+            focusedChannelId = remembered[newMode] ?: focusedChannelId,
+            focusedChannelByMode = remembered,
+        )
+    }
+
+    private fun LiveTvUiState.rememberFocusedChannelForMode(): LiveTvUiState {
+        val channelId = focusedChannelId ?: return this
+        if (!mode.isFocusRestorableLayer()) return this
+        return copy(focusedChannelByMode = focusedChannelByMode + (mode to channelId))
+    }
+
+    private fun LiveTvMode.isFocusRestorableLayer(): Boolean = when (this) {
+        LiveTvMode.CHANNEL_LIST_VISIBLE,
+        LiveTvMode.CATEGORY_PANEL_VISIBLE,
+        LiveTvMode.EPG_VISIBLE,
+        LiveTvMode.RECENT_CHANNELS_VISIBLE -> true
+        else -> false
+    }
 
     private fun LiveTvUiState.selectGroup(groupId: String, fallbackChannelId: Long?): LiveTvUiState {
         val restored = lastChannelByGroup[groupId] ?: fallbackChannelId ?: channelIds.firstOrNull()
@@ -249,7 +280,7 @@ object LiveTvReducer {
     ).ensureValidFocus()
 
     private fun LiveTvUiState.focusChannel(channelId: Long): LiveTvUiState = if (channelIds.isEmpty() || channelId in channelIds) {
-        copy(focusedChannelId = channelId).rememberFocusedChannel()
+        copy(focusedChannelId = channelId).rememberFocusedChannel().rememberFocusedChannelForMode()
     } else {
         this
     }.ensureValidFocus()
@@ -258,7 +289,7 @@ object LiveTvReducer {
         if (channelIds.isEmpty()) return this
         val currentIndex = channelIds.indexOf(focusedChannelId).takeIf { it >= 0 } ?: 0
         val nextIndex = (currentIndex + step).coerceIn(channelIds.indices)
-        return copy(focusedChannelId = channelIds[nextIndex]).rememberFocusedChannel()
+        return copy(focusedChannelId = channelIds[nextIndex]).rememberFocusedChannel().rememberFocusedChannelForMode()
     }
 
     private fun LiveTvUiState.zap(step: Int): LiveTvUiState {

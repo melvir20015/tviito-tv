@@ -116,4 +116,67 @@ class LiveTvReducerTest {
         assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
     }
 
+    @Test fun backFromRecentChannelsClosesOnlyRecentLayer() {
+        val recent = LiveTvUiState(mode = LiveTvMode.RECENT_CHANNELS_VISIBLE, channelIds = channels)
+
+        val fullscreen = LiveTvReducer.reduce(recent, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
+    }
+
+    @Test fun contextMenuRestoresOriginLayerAndItsRememberedFocus() {
+        val guide = LiveTvUiState(
+            mode = LiveTvMode.EPG_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 20L,
+            focusedChannelByMode = mapOf(LiveTvMode.EPG_VISIBLE to 30L),
+        )
+
+        val menu = LiveTvReducer.reduce(guide, LiveTvAction.LongOk)
+        val restored = LiveTvReducer.reduce(menu, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.CONTEXT_MENU_VISIBLE, menu.mode)
+        assertEquals(LiveTvMode.EPG_VISIBLE, menu.openedFromMode)
+        assertEquals(LiveTvMode.EPG_VISIBLE, restored.mode)
+        assertEquals(20L, restored.focusedChannelId)
+    }
+
+    @Test fun recentFocusMovementDoesNotChangePlayingUntilOk() {
+        val state = LiveTvUiState(
+            mode = LiveTvMode.RECENT_CHANNELS_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 10L,
+            selectedChannelId = 10L,
+            playingChannelId = 30L,
+        )
+
+        val moved = LiveTvReducer.reduce(state, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+        val buffering = LiveTvReducer.reduce(moved, LiveTvAction.Ok)
+
+        assertEquals(20L, moved.focusedChannelId)
+        assertEquals(30L, moved.playingChannelId)
+        assertEquals(LiveTvMode.BUFFERING, buffering.mode)
+        assertEquals(20L, buffering.selectedChannelId)
+        assertEquals(30L, buffering.playingChannelId)
+    }
+
+    @Test fun switchingLayersRestoresFocusedChannelPerLayer() {
+        val channelsLayer = LiveTvUiState(
+            mode = LiveTvMode.CHANNEL_LIST_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 10L,
+        )
+
+        val guide = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+        val guideMoved = LiveTvReducer.reduce(guide, LiveTvAction.Dpad(LiveTvDirection.DOWN))
+        val restoredChannels = LiveTvReducer.reduce(guideMoved, LiveTvAction.Back)
+        val restoredGuide = LiveTvReducer.reduce(restoredChannels, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+
+        assertEquals(20L, guideMoved.focusedChannelId)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, restoredChannels.mode)
+        assertEquals(10L, restoredChannels.focusedChannelId)
+        assertEquals(LiveTvMode.EPG_VISIBLE, restoredGuide.mode)
+        assertEquals(20L, restoredGuide.focusedChannelId)
+    }
+
 }

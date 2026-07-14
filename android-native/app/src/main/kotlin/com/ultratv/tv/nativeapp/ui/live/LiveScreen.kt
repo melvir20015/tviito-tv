@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -180,6 +181,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
     val categoryRequester = remember { FocusRequester() }
     val channelRequester = remember { FocusRequester() }
     val guideRequester = remember { FocusRequester() }
+    val recentRequester = remember { FocusRequester() }
     val categoryListState = rememberLazyListState()
     val channelListState = rememberLazyListState()
     val guideListState = rememberLazyListState()
@@ -229,6 +231,7 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                 LiveTvMode.CATEGORY_PANEL_VISIBLE -> categoryRequester.requestFocus()
                 LiveTvMode.CHANNEL_LIST_VISIBLE -> channelRequester.requestFocus()
                 LiveTvMode.EPG_VISIBLE -> guideRequester.requestFocus()
+                LiveTvMode.RECENT_CHANNELS_VISIBLE -> recentRequester.requestFocus()
                 else -> Unit
             }
         }
@@ -263,6 +266,10 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
         val formFactor = liveTvFormFactor(maxWidth)
         LiveBackgroundPlayer(channel = videoChannel, locked = lockedKey(videoChannel) in locked, vm = vm)
         if (uiState.mode != LiveTvMode.FULLSCREEN_PLAYBACK && uiState.mode != LiveTvMode.PROGRAM_INFO_VISIBLE) Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.44f)))
+        val recentChannels = remember(channels, activeChannel?.id, livePrefs.livePreviousChannelRemoteId, livePrefs.liveLastChannelRemoteId) {
+            val preferred = listOfNotNull(activeChannel?.remoteId, livePrefs.liveLastChannelRemoteId.takeIf { it.isNotBlank() }, livePrefs.livePreviousChannelRemoteId.takeIf { it.isNotBlank() })
+            (preferred.mapNotNull { remoteId -> channels.firstOrNull { it.remoteId == remoteId } } + channels).distinctBy { it.id }.take(12)
+        }
         Crossfade(targetState = uiState.mode, animationSpec = tween(LiveTvMotion.panelCrossfadeMillis), label = "live-state-layer") { mode ->
             when (mode) {
                 LiveTvMode.CHANNEL_LIST_VISIBLE -> Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -274,13 +281,16 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
                 LiveTvMode.CATEGORY_PANEL_VISIBLE -> Row(Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
                     Box(Modifier.width(330.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.94f), LiveTvShapes.panel).padding(18.dp)) {
                         RootNavigationRail(formFactor, Modifier.align(Alignment.CenterStart))
-                        PlaylistPanel(categories, selected, categoryRequester, categoryListState, Modifier.padding(start = 16.dp).fillMaxSize()) { id -> vm.selectCategory(id); dispatch(LiveTvAction.SelectGroup(id, channels.firstOrNull()?.id)) }
+                        PlaylistPanel(categories, selected, categoryRequester, categoryListState, Modifier.padding(start = 16.dp).fillMaxSize()) { id -> if (id == CATEGORY_RECENTS) { dispatch(LiveTvAction.OpenPanel(LiveTvMode.RECENT_CHANNELS_VISIBLE)) } else { vm.selectCategory(id); dispatch(LiveTvAction.SelectGroup(id, channels.firstOrNull()?.id)) } }
                     }
                     Box(Modifier.width(520.dp).fillMaxHeight().background(LiveTvColors.surface.copy(alpha = 0.72f), LiveTvShapes.panel).padding(18.dp)) {
                         ChannelListOverlay(channels, uiState.focusedChannelId, categoryTitle, channelRequester, channelListState, nowNext, locked, showNumbers, favorites, activeChannel?.id, Modifier.fillMaxSize(), { ch -> dispatch(LiveTvAction.FocusChannel(ch.id)) }, { }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
                     }
                 }
                 LiveTvMode.EPG_VISIBLE -> EpgOverlayGuide(channels, activeChannel?.id, uiState.focusedChannelId, nowNext, favorites, locked, guideRequester, guideListState, { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextProgram = it; contextChannel = channels.firstOrNull { ch -> ch.id == it.channelId }; dispatch(LiveTvAction.LongOk) }, { contextChannel = it; dispatch(LiveTvAction.LongOk) }, Modifier.fillMaxSize().padding(horizontal = LiveTvSpacing.screenHorizontal, vertical = LiveTvSpacing.screenVertical))
+                LiveTvMode.RECENT_CHANNELS_VISIBLE -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+                    RecentChannelsOverlay(recentChannels, uiState.focusedChannelId, activeChannel?.id, recentRequester, nowNext, locked, favorites, showNumbers, Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 34.dp), { dispatch(LiveTvAction.FocusChannel(it.id)) }, ::playInPlace, { contextChannel = it; dispatch(LiveTvAction.LongOk) })
+                }
                 else -> Unit
             }
         }
@@ -288,9 +298,18 @@ fun LiveTvScreen(onPlay: (url: String, title: String) -> Unit, vm: LiveViewModel
             LiveChannelInfoBar(videoChannel, nowNext[videoChannel?.id], lockedKey(videoChannel) in locked, videoChannel?.remoteId in favorites, resolving || uiState.playerState.isLoading, Modifier.fillMaxWidth().fillMaxHeight(0.32f))
         }
         if (uiState.mode == LiveTvMode.CONTEXT_MENU_VISIBLE) {
-            contextProgram?.let { program -> ProgramContextMenu(program, { videoChannel?.let { vm.addReminder(it, program) } }, { dispatch(LiveTvAction.Back) }) } ?: contextSource?.let { ch ->
-                ChannelContextMenu(ch, lockedKey(ch) in locked, ch.remoteId in favorites, nowNext[ch.id]?.first, { vm.toggleFavorite(ch) }, { vm.toggleLock(ch) }, { playInPlace(ch); dispatch(LiveTvAction.Back) }, { dispatch(LiveTvAction.Back) })
-            }
+            LiveContextMenu(
+                channel = contextSource,
+                program = contextProgram,
+                locked = lockedKey(contextSource) in locked,
+                favorite = contextSource?.remoteId in favorites,
+                now = contextSource?.let { nowNext[it.id]?.first },
+                onReminder = { contextProgram?.let { program -> videoChannel?.let { vm.addReminder(it, program) } } },
+                onToggleFavorite = { contextSource?.let(vm::toggleFavorite) },
+                onToggleLock = { contextSource?.let(vm::toggleLock) },
+                onPlay = { contextSource?.let { playInPlace(it); dispatch(LiveTvAction.Back) } },
+                onDismiss = { dispatch(LiveTvAction.Back) },
+            )
         }
     }
 }
@@ -332,6 +351,112 @@ private fun ChannelListOverlay(channels: List<ChannelEntity>, focusedId: Long?, 
     GroupPanel(channels, focusedId, categoryTitle, requester, state, nowNext, locked, showNumbers, favorites, activeId, modifier, onFocus, onBackToCategories, onChannelClick, onOpenMenu)
 }
 
+
+@Composable
+private fun RecentChannelsOverlay(
+    channels: List<ChannelEntity>,
+    focusedId: Long?,
+    activeId: Long?,
+    requester: FocusRequester,
+    nowNext: Map<Long, Pair<EpgEntity?, EpgEntity?>>,
+    locked: Set<String>,
+    favorites: Set<String>,
+    showNumbers: Boolean,
+    modifier: Modifier = Modifier,
+    onFocus: (ChannelEntity) -> Unit,
+    onPlay: (ChannelEntity) -> Unit,
+    onOpenMenu: (ChannelEntity) -> Unit,
+) {
+    Column(
+        modifier
+            .background(
+                Brush.verticalGradient(
+                    0f to Color.Transparent,
+                    0.28f to LiveTvColors.surface.copy(alpha = 0.78f),
+                    1f to LiveTvColors.surface.copy(alpha = 0.94f),
+                ),
+                LiveTvShapes.panel,
+            )
+            .padding(horizontal = 22.dp, vertical = 18.dp),
+    ) {
+        Text("Canales recientes", color = LiveTvColors.textPrimary, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        Text("Muévete con izquierda/derecha; solo OK cambia la reproducción.", color = LiveTvColors.textMuted, fontSize = 12.sp)
+        Spacer(Modifier.height(14.dp))
+        if (channels.isEmpty()) {
+            Box(Modifier.fillMaxWidth().height(104.dp), contentAlignment = Alignment.CenterStart) {
+                Text("Todavía no hay canales recientes.", color = LiveTvColors.textMuted)
+            }
+        } else {
+            LazyRow(
+                modifier = Modifier.focusRequester(requester),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(end = 24.dp),
+            ) {
+                items(channels, key = { it.id }) { ch ->
+                    RecentChannelCard(
+                        channel = ch,
+                        number = channels.indexOf(ch) + 1,
+                        focused = focusedId == ch.id,
+                        active = activeId == ch.id,
+                        locked = lockedKey(ch) in locked,
+                        favorite = ch.remoteId in favorites,
+                        showNumber = showNumbers,
+                        now = nowNext[ch.id]?.first,
+                        onFocus = onFocus,
+                        onPlay = onPlay,
+                        onOpenMenu = onOpenMenu,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecentChannelCard(
+    channel: ChannelEntity,
+    number: Int,
+    focused: Boolean,
+    active: Boolean,
+    locked: Boolean,
+    favorite: Boolean,
+    showNumber: Boolean,
+    now: EpgEntity?,
+    onFocus: (ChannelEntity) -> Unit,
+    onPlay: (ChannelEntity) -> Unit,
+    onOpenMenu: (ChannelEntity) -> Unit,
+) {
+    Card(
+        onClick = { onPlay(channel) },
+        shape = CardDefaults.shape(RoundedCornerShape(18.dp)),
+        colors = CardDefaults.colors(containerColor = if (focused) LiveTvColors.surfaceRaised else LiveTvColors.surface.copy(alpha = 0.9f)),
+        modifier = Modifier
+            .width(260.dp)
+            .height(124.dp)
+            .border(
+                if (focused || active) 2.dp else 1.dp,
+                if (active) LiveTvColors.live else if (focused) LiveTvColors.accent else LiveTvColors.outline,
+                RoundedCornerShape(18.dp),
+            )
+            .onFocusEventCompat { onFocus(channel) }
+            .onKeyEvent { if (it.type == KeyEventType.KeyDown && it.key == Key.Menu) { onOpenMenu(channel); true } else false },
+    ) {
+        Column(Modifier.fillMaxSize().padding(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (showNumber) Text("%03d".format(number), color = LiveTvColors.textSubtle, fontFamily = UltraFonts.Mono, fontSize = 11.sp, modifier = Modifier.width(42.dp))
+                ChannelLogo(channel.name, channel.logo, null, channel.name.hashCode(), null, 38.dp, false)
+                Spacer(Modifier.width(10.dp))
+                Text(channel.name, color = LiveTvColors.textPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, modifier = Modifier.weight(1f))
+                if (favorite) Text("★", color = LiveTvColors.accent, fontSize = 13.sp)
+            }
+            Spacer(Modifier.height(10.dp))
+            Text(now?.title ?: if (locked) "Canal bloqueado" else "Sin EPG ahora", color = if (now == null) LiveTvColors.textSubtle else LiveTvColors.textSecondary, fontSize = 12.sp, maxLines = 2)
+            Spacer(Modifier.weight(1f))
+            Text(if (active) "Reproduciendo" else "OK para reproducir", color = if (active) LiveTvColors.live else LiveTvColors.textMuted, fontSize = 11.sp)
+        }
+    }
+}
+
 @Composable
 private fun PlayerControlsOverlay(channel: ChannelEntity?, locked: Boolean, onBack: () -> Unit, onPlay: () -> Unit) {
     Row(horizontalArrangement = Arrangement.spacedBy(LiveTvSpacing.itemGap)) {
@@ -343,6 +468,42 @@ private fun PlayerControlsOverlay(channel: ChannelEntity?, locked: Boolean, onBa
 @Composable
 private fun EpgGuide(now: EpgEntity?) {
     EpgProgressBar(now)
+}
+
+
+@Composable
+private fun LiveContextMenu(
+    channel: ChannelEntity?,
+    program: EpgEntity?,
+    locked: Boolean,
+    favorite: Boolean,
+    now: EpgEntity?,
+    onReminder: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onToggleLock: () -> Unit,
+    onPlay: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BackHandler { onDismiss() }
+    Box(Modifier.fillMaxSize().background(LiveTvColors.scrim.copy(alpha = 0.38f)), contentAlignment = Alignment.CenterEnd) {
+        Column(Modifier.fillMaxHeight().width(LiveTvDimensions.contextMenuWidth).background(LiveTvColors.surface, LiveTvShapes.menu).border(1.dp, LiveTvColors.outlineStrong, LiveTvShapes.menu).padding(18.dp)) {
+            Text(program?.title ?: channel?.name ?: "Opciones", color = LiveTvColors.textPrimary, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Spacer(Modifier.height(8.dp))
+            Text(program?.let { "${fmt(it.startMs)} - ${fmt(it.endMs)}" } ?: now?.title ?: "Sin programa actual", color = LiveTvColors.textMuted, fontSize = 13.sp, maxLines = 2)
+            Spacer(Modifier.height(14.dp))
+            if (program != null) {
+                Card(onClick = onReminder, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text("Crear recordatorio", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+                Spacer(Modifier.height(8.dp))
+            }
+            if (channel != null) {
+                Card(onClick = onPlay, colors = CardDefaults.colors(containerColor = LiveTvColors.accent)) { Text(if (locked) "Canal bloqueado" else "Reproducir canal", color = Color.White, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+                Spacer(Modifier.height(8.dp))
+                Card(onClick = onToggleFavorite, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text(if (favorite) "Quitar de favoritos" else "Agregar a favoritos", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+                Spacer(Modifier.height(8.dp))
+                Card(onClick = onToggleLock, colors = CardDefaults.colors(containerColor = LiveTvColors.surfaceRaised)) { Text(if (locked) "Desbloquear canal" else "Bloquear canal", color = LiveTvColors.textPrimary, modifier = Modifier.fillMaxWidth().padding(12.dp)) }
+            }
+        }
+    }
 }
 
 @Composable
