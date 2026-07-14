@@ -211,16 +211,27 @@ object LiveTvReducer {
     ).ensureValidFocus()
 
     private fun LiveTvUiState.onBack(): LiveTvUiState = when (mode) {
-        LiveTvMode.CONTEXT_MENU_VISIBLE, LiveTvMode.CHANNEL_CONTEXT_MENU, LiveTvMode.PROGRAM_CONTEXT_MENU -> copy(
-            mode = openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE,
-            openedFromMode = null,
-            focusedChannelId = focusedChannelByMode[openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE] ?: focusedChannelId,
-        )
+        LiveTvMode.CONTEXT_MENU_VISIBLE, LiveTvMode.CHANNEL_CONTEXT_MENU, LiveTvMode.PROGRAM_CONTEXT_MENU -> {
+            val restoredMode = openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE
+            copy(
+                mode = restoredMode,
+                openedFromMode = null,
+                focusedChannelId = focusedChannelByMode[restoredMode] ?: focusedChannelId,
+            )
+        }
         LiveTvMode.PLAYBACK_ERROR, LiveTvMode.BUFFERING, LiveTvMode.LOADING_CHANNEL -> toFullscreen()
         LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE)
         LiveTvMode.PROGRAM_DETAILS_VISIBLE -> switchMode(LiveTvMode.EPG_VISIBLE)
         LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> switchMode(LiveTvMode.CHANNEL_LIST_VISIBLE).copy(videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
-        LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.RECENT_CHANNELS_VISIBLE, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> toFullscreen()
+        LiveTvMode.RECENT_CHANNELS_VISIBLE -> openedFromMode?.let { restoredMode ->
+            copy(
+                mode = restoredMode,
+                openedFromMode = null,
+                focusedChannelId = focusedChannelByMode[restoredMode] ?: focusedChannelId,
+                videoSurfaceMode = if (restoredMode == LiveTvMode.FULLSCREEN_PLAYBACK) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
+            )
+        } ?: toFullscreen()
+        LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> toFullscreen()
         LiveTvMode.PLAYLIST_LIST -> switchMode(LiveTvMode.CATEGORY_PANEL_VISIBLE)
         LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> this
     }.ensureValidFocus()
@@ -232,13 +243,24 @@ object LiveTvReducer {
         previewState = LiveTvLoadState(),
     ).ensureValidFocus()
 
-    private fun LiveTvUiState.openPanel(newMode: LiveTvMode): LiveTvUiState = copy(
-        mode = newMode,
-        focusedChannelId = focusedChannelByMode[newMode] ?: focusedChannelId,
-        focusedChannelByMode = if (mode.isFocusRestorableLayer() && focusedChannelId != null) focusedChannelByMode + (mode to focusedChannelId) else focusedChannelByMode,
-        openedFromMode = if (newMode == LiveTvMode.CONTEXT_MENU_VISIBLE || newMode.name.endsWith("CONTEXT_MENU")) mode else openedFromMode,
-        videoSurfaceMode = if (newMode == LiveTvMode.FULLSCREEN_PLAYBACK) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
-    ).ensureValidFocus()
+    private fun LiveTvUiState.openPanel(newMode: LiveTvMode): LiveTvUiState {
+        val remembered = if (mode.isFocusRestorableLayer() && focusedChannelId != null) {
+            focusedChannelByMode + (mode to focusedChannelId)
+        } else {
+            focusedChannelByMode
+        }
+        return copy(
+            mode = newMode,
+            focusedChannelId = remembered[newMode] ?: focusedChannelId,
+            focusedChannelByMode = remembered,
+            openedFromMode = when {
+                newMode == LiveTvMode.CONTEXT_MENU_VISIBLE || newMode.name.endsWith("CONTEXT_MENU") -> mode
+                newMode == LiveTvMode.RECENT_CHANNELS_VISIBLE -> mode
+                else -> openedFromMode
+            },
+            videoSurfaceMode = if (newMode == LiveTvMode.FULLSCREEN_PLAYBACK) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
+        ).ensureValidFocus()
+    }
 
     private fun LiveTvUiState.switchMode(newMode: LiveTvMode): LiveTvUiState {
         val remembered = if (mode.isFocusRestorableLayer() && focusedChannelId != null) {

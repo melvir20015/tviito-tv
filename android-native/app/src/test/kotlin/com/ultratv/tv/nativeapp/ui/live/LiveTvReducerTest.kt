@@ -209,4 +209,38 @@ class LiveTvReducerTest {
         assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
     }
 
+    @Test fun recientesAbiertosDesdeCategoriasVuelvenACategoriasYRestauranFoco() {
+        val categoriesLayer = LiveTvUiState(
+            mode = LiveTvMode.CATEGORY_PANEL_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 20L,
+        )
+
+        val recent = LiveTvReducer.reduce(categoriesLayer, LiveTvAction.OpenPanel(LiveTvMode.RECENT_CHANNELS_VISIBLE))
+        val movedRecent = LiveTvReducer.reduce(recent, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+        val restoredCategories = LiveTvReducer.reduce(movedRecent, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.RECENT_CHANNELS_VISIBLE, recent.mode)
+        assertEquals(LiveTvMode.CATEGORY_PANEL_VISIBLE, recent.openedFromMode)
+        assertEquals(30L, movedRecent.focusedChannelId)
+        assertEquals(LiveTvMode.CATEGORY_PANEL_VISIBLE, restoredCategories.mode)
+        assertEquals(20L, restoredCategories.focusedChannelId)
+    }
+
+    @Test fun menuContextualAbiertoDesdeRecientesVuelveARecientesYConservaFoco() {
+        val recent = LiveTvUiState(
+            mode = LiveTvMode.RECENT_CHANNELS_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 20L,
+        )
+
+        val menu = LiveTvReducer.reduce(recent, LiveTvAction.LongOk)
+        val movedBehindMenu = LiveTvReducer.reduce(menu.copy(focusedChannelId = 30L), LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.CONTEXT_MENU_VISIBLE, menu.mode)
+        assertEquals(LiveTvMode.RECENT_CHANNELS_VISIBLE, menu.openedFromMode)
+        assertEquals(LiveTvMode.RECENT_CHANNELS_VISIBLE, movedBehindMenu.mode)
+        assertEquals(20L, movedBehindMenu.focusedChannelId)
+    }
+
 }
