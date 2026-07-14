@@ -5,6 +5,27 @@ import com.ultratv.tv.nativeapp.data.prefs.UserPrefs
 
 /** Explicit modes for the Live TV experience. */
 enum class LiveTvMode {
+    /** Reproducción limpia a pantalla completa; no hay barras ni paneles permanentes. */
+    FULLSCREEN_PLAYBACK,
+    /** Overlay inferior temporal de información del canal/programa. */
+    PROGRAM_INFO_VISIBLE,
+    /** Fila horizontal de canales recientes sobre el video. */
+    RECENT_CHANNELS_VISIBLE,
+    /** Lista vertical de canales sobre el lado izquierdo. */
+    CHANNEL_LIST_VISIBLE,
+    /** Panel adicional de categorías abierto desde la izquierda. */
+    CATEGORY_PANEL_VISIBLE,
+    /** Guía EPG como capa sobre el reproductor. */
+    EPG_VISIBLE,
+    /** Detalles ampliados del programa enfocado. */
+    PROGRAM_DETAILS_VISIBLE,
+    /** Menú contextual lateral abierto desde lista, guía o info. */
+    CONTEXT_MENU_VISIBLE,
+    /** Cambio de stream en curso sin desmontar el reproductor. */
+    BUFFERING,
+    PLAYBACK_ERROR,
+
+    // Alias legados conservados mientras se migra LiveScreen por etapas.
     PLAYER_FULLSCREEN,
     PLAYER_CONTROLS_VISIBLE,
     CHANNEL_LIST_OVERLAY,
@@ -16,7 +37,6 @@ enum class LiveTvMode {
     CHANNEL_CONTEXT_MENU,
     PROGRAM_CONTEXT_MENU,
     LOADING_CHANNEL,
-    PLAYBACK_ERROR,
 }
 
 enum class LiveTvDirection { UP, DOWN, LEFT, RIGHT }
@@ -29,7 +49,7 @@ data class LiveTvLoadState(
 )
 
 data class LiveTvUiState(
-    val mode: LiveTvMode = LiveTvMode.PLAYER_FULLSCREEN,
+    val mode: LiveTvMode = LiveTvMode.FULLSCREEN_PLAYBACK,
     val channelIds: List<Long> = emptyList(),
     val focusedChannelId: Long? = channelIds.firstOrNull(),
     val selectedChannelId: Long? = focusedChannelId,
@@ -61,13 +81,13 @@ fun UserPrefs.toLiveTvUiState(
     lastChannelId: Long? = null,
 ): LiveTvUiState {
     val initialMode = when (liveLastMode) {
-        LiveLastMode.PLAYER_FULLSCREEN -> LiveTvMode.PLAYER_FULLSCREEN
-        LiveLastMode.CHANNEL_LIST -> LiveTvMode.CHANNEL_LIST_OVERLAY
-        LiveLastMode.TV_GUIDE -> LiveTvMode.TV_GUIDE
+        LiveLastMode.PLAYER_FULLSCREEN -> LiveTvMode.FULLSCREEN_PLAYBACK
+        LiveLastMode.CHANNEL_LIST -> LiveTvMode.CHANNEL_LIST_VISIBLE
+        LiveLastMode.TV_GUIDE -> LiveTvMode.EPG_VISIBLE
     }
     val initialChannelId = lastChannelId ?: channelIds.firstOrNull()
     return LiveTvUiState(
-        mode = if (liveStayOnGuide) LiveTvMode.TV_GUIDE else initialMode,
+        mode = if (liveStayOnGuide) LiveTvMode.EPG_VISIBLE else initialMode,
         channelIds = channelIds,
         focusedChannelId = initialChannelId,
         selectedChannelId = initialChannelId,
@@ -85,7 +105,7 @@ fun UserPrefs.toLiveTvUiState(
         previewDebounceMs = livePreviewDebounceMs,
         verticalPositionByGroup = liveGroupPositions,
         buttonAssignments = liveButtonAssignments,
-        videoSurfaceMode = if (liveStayOnGuide || initialMode != LiveTvMode.PLAYER_FULLSCREEN) {
+        videoSurfaceMode = if (liveStayOnGuide || initialMode != LiveTvMode.FULLSCREEN_PLAYBACK) {
             LiveTvVideoSurfaceMode.PREVIEW
         } else {
             LiveTvVideoSurfaceMode.FULLSCREEN
@@ -136,7 +156,7 @@ object LiveTvReducer {
         is LiveTvAction.PreviewLoading -> state.copy(previewState = LiveTvLoadState(isLoading = action.isLoading))
         is LiveTvAction.PreviewError -> state.copy(previewState = LiveTvLoadState(errorMessage = action.message))
         is LiveTvAction.PlayerLoading -> state.copy(
-            mode = LiveTvMode.LOADING_CHANNEL,
+            mode = LiveTvMode.BUFFERING,
             selectedChannelId = action.channelId ?: state.selectedChannelId,
             playerState = LiveTvLoadState(isLoading = true),
         ).ensureValidFocus()
@@ -146,7 +166,7 @@ object LiveTvReducer {
             videoSurfaceMode = LiveTvVideoSurfaceMode.HIDDEN,
         ).ensureValidFocus()
         LiveTvAction.PlaybackReady -> state.copy(
-            mode = LiveTvMode.PLAYER_FULLSCREEN,
+            mode = LiveTvMode.FULLSCREEN_PLAYBACK,
             playingChannelId = state.selectedChannelId ?: state.focusedChannelId,
             playerState = LiveTvLoadState(),
             videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN,
@@ -155,15 +175,18 @@ object LiveTvReducer {
 
     private fun LiveTvUiState.onDpad(direction: LiveTvDirection): LiveTvUiState = when (direction) {
         LiveTvDirection.LEFT -> when (mode) {
-            LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_PREVIEW, videoSurfaceMode = LiveTvVideoSurfaceMode.PREVIEW)
-            LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.CHANNEL_LIST_OVERLAY -> copy(mode = LiveTvMode.GROUP_LIST)
-            LiveTvMode.GROUP_LIST -> copy(mode = LiveTvMode.ROOT_NAVIGATION)
+            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
+            LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
+            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> copy(mode = LiveTvMode.CATEGORY_PANEL_VISIBLE)
+            LiveTvMode.CATEGORY_PANEL_VISIBLE -> this
+            LiveTvMode.RECENT_CHANNELS_VISIBLE -> moveFocus(step = -1)
             else -> this
         }.ensureValidFocus()
         LiveTvDirection.RIGHT -> when (mode) {
-            LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.GROUP_LIST)
-            LiveTvMode.GROUP_LIST -> copy(mode = LiveTvMode.CHANNEL_LIST_OVERLAY)
-            LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> copy(mode = LiveTvMode.TV_GUIDE)
+            LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
+            LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW -> copy(mode = LiveTvMode.EPG_VISIBLE)
+            LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> copy(mode = LiveTvMode.EPG_VISIBLE)
+            LiveTvMode.RECENT_CHANNELS_VISIBLE -> moveFocus(step = 1)
             else -> this
         }.ensureValidFocus()
         LiveTvDirection.UP -> moveFocus(step = -1)
@@ -171,39 +194,37 @@ object LiveTvReducer {
     }
 
     private fun LiveTvUiState.onOk(): LiveTvUiState = when (mode) {
-        LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.TV_GUIDE -> copy(
+        LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE, LiveTvMode.RECENT_CHANNELS_VISIBLE -> copy(
             selectedChannelId = focusedChannelId,
-            mode = LiveTvMode.LOADING_CHANNEL,
+            mode = LiveTvMode.BUFFERING,
             playerState = LiveTvLoadState(isLoading = true),
         ).rememberFocusedChannel()
-        LiveTvMode.PLAYER_FULLSCREEN -> copy(mode = LiveTvMode.PLAYER_CONTROLS_VISIBLE)
+        LiveTvMode.CATEGORY_PANEL_VISIBLE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
+        LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> copy(mode = LiveTvMode.PROGRAM_INFO_VISIBLE)
         else -> this
     }.ensureValidFocus()
 
     private fun LiveTvUiState.openContextMenu(): LiveTvUiState = copy(
-        mode = if (mode == LiveTvMode.TV_GUIDE && focusedProgramId != null) {
-            LiveTvMode.PROGRAM_CONTEXT_MENU
-        } else {
-            LiveTvMode.CHANNEL_CONTEXT_MENU
-        },
+        mode = LiveTvMode.CONTEXT_MENU_VISIBLE,
         openedFromMode = mode,
     ).ensureValidFocus()
 
     private fun LiveTvUiState.onBack(): LiveTvUiState = when (mode) {
-        LiveTvMode.CHANNEL_CONTEXT_MENU, LiveTvMode.PROGRAM_CONTEXT_MENU -> copy(
-            mode = openedFromMode ?: LiveTvMode.CHANNEL_LIST_OVERLAY,
+        LiveTvMode.CONTEXT_MENU_VISIBLE, LiveTvMode.CHANNEL_CONTEXT_MENU, LiveTvMode.PROGRAM_CONTEXT_MENU -> copy(
+            mode = openedFromMode ?: LiveTvMode.CHANNEL_LIST_VISIBLE,
             openedFromMode = null,
         )
-        LiveTvMode.PLAYBACK_ERROR, LiveTvMode.LOADING_CHANNEL -> toFullscreen()
-        LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_PREVIEW, videoSurfaceMode = LiveTvVideoSurfaceMode.PREVIEW)
-        LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.GROUP_LIST)
-        LiveTvMode.GROUP_LIST, LiveTvMode.PLAYLIST_LIST -> copy(mode = LiveTvMode.CHANNEL_LIST_OVERLAY)
-        LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> toFullscreen()
-        LiveTvMode.PLAYER_FULLSCREEN -> this
+        LiveTvMode.PLAYBACK_ERROR, LiveTvMode.BUFFERING, LiveTvMode.LOADING_CHANNEL -> toFullscreen()
+        LiveTvMode.CATEGORY_PANEL_VISIBLE, LiveTvMode.GROUP_LIST, LiveTvMode.ROOT_NAVIGATION -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
+        LiveTvMode.PROGRAM_DETAILS_VISIBLE -> copy(mode = LiveTvMode.EPG_VISIBLE)
+        LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE -> copy(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN)
+        LiveTvMode.CHANNEL_LIST_VISIBLE, LiveTvMode.CHANNEL_LIST_OVERLAY, LiveTvMode.CHANNEL_LIST_PREVIEW, LiveTvMode.RECENT_CHANNELS_VISIBLE, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_CONTROLS_VISIBLE -> toFullscreen()
+        LiveTvMode.PLAYLIST_LIST -> copy(mode = LiveTvMode.CATEGORY_PANEL_VISIBLE)
+        LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PLAYER_FULLSCREEN -> this
     }.ensureValidFocus()
 
     private fun LiveTvUiState.toFullscreen(): LiveTvUiState = copy(
-        mode = LiveTvMode.PLAYER_FULLSCREEN,
+        mode = LiveTvMode.FULLSCREEN_PLAYBACK,
         openedFromMode = null,
         videoSurfaceMode = LiveTvVideoSurfaceMode.FULLSCREEN,
         previewState = LiveTvLoadState(),
@@ -211,13 +232,13 @@ object LiveTvReducer {
 
     private fun LiveTvUiState.openPanel(newMode: LiveTvMode): LiveTvUiState = copy(
         mode = newMode,
-        openedFromMode = if (newMode.name.endsWith("CONTEXT_MENU")) mode else openedFromMode,
-        videoSurfaceMode = if (newMode == LiveTvMode.PLAYER_FULLSCREEN) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
+        openedFromMode = if (newMode == LiveTvMode.CONTEXT_MENU_VISIBLE || newMode.name.endsWith("CONTEXT_MENU")) mode else openedFromMode,
+        videoSurfaceMode = if (newMode == LiveTvMode.FULLSCREEN_PLAYBACK) LiveTvVideoSurfaceMode.FULLSCREEN else videoSurfaceMode,
     ).ensureValidFocus()
 
     private fun LiveTvUiState.selectGroup(groupId: String, fallbackChannelId: Long?): LiveTvUiState {
         val restored = lastChannelByGroup[groupId] ?: fallbackChannelId ?: channelIds.firstOrNull()
-        return copy(activeGroupId = groupId, focusedChannelId = restored, selectedChannelId = restored, mode = LiveTvMode.CHANNEL_LIST_OVERLAY)
+        return copy(activeGroupId = groupId, focusedChannelId = restored, selectedChannelId = restored, mode = LiveTvMode.CHANNEL_LIST_VISIBLE)
             .ensureValidFocus()
     }
 
@@ -249,7 +270,7 @@ object LiveTvReducer {
         return copy(
             focusedChannelId = nextChannelId,
             selectedChannelId = nextChannelId,
-            mode = LiveTvMode.LOADING_CHANNEL,
+            mode = LiveTvMode.BUFFERING,
             playerState = LiveTvLoadState(isLoading = true),
         ).rememberFocusedChannel()
     }

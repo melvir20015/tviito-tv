@@ -16,62 +16,78 @@ class LiveTvReducerTest {
         assertEquals(10L, reduced.focusedChannelId)
     }
 
-    @Test fun leftMovesFromEpgToChannelsGroupsAndRootNavigation() {
-        val fromGuide = LiveTvUiState(mode = LiveTvMode.TV_GUIDE, channelIds = channels)
+    @Test fun leftMovesFromPlaybackToChannelsAndCategoriesWithoutChangingVideoSurface() {
+        val playback = LiveTvUiState(mode = LiveTvMode.FULLSCREEN_PLAYBACK, channelIds = channels)
 
-        val channelsLayer = LiveTvReducer.reduce(fromGuide, LiveTvAction.Dpad(LiveTvDirection.LEFT))
-        val groupsLayer = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Dpad(LiveTvDirection.LEFT))
-        val rootLayer = LiveTvReducer.reduce(groupsLayer, LiveTvAction.Dpad(LiveTvDirection.LEFT))
+        val channelsLayer = LiveTvReducer.reduce(playback, LiveTvAction.Dpad(LiveTvDirection.LEFT))
+        val categoriesLayer = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Dpad(LiveTvDirection.LEFT))
 
-        assertEquals(LiveTvMode.CHANNEL_LIST_PREVIEW, channelsLayer.mode)
-        assertEquals(LiveTvMode.GROUP_LIST, groupsLayer.mode)
-        assertEquals(LiveTvMode.ROOT_NAVIGATION, rootLayer.mode)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, channelsLayer.mode)
+        assertEquals(LiveTvVideoSurfaceMode.FULLSCREEN, channelsLayer.videoSurfaceMode)
+        assertEquals(LiveTvMode.CATEGORY_PANEL_VISIBLE, categoriesLayer.mode)
     }
 
-    @Test fun backClosesContextGuideChannelsAndControlsByLayers() {
+    @Test fun rightMovesFromChannelsToEpgAndBackReturnsOneLayerAtATime() {
+        val channelsLayer = LiveTvUiState(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, channelIds = channels)
+
+        val guide = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Dpad(LiveTvDirection.RIGHT))
+        val backToChannels = LiveTvReducer.reduce(guide, LiveTvAction.Back)
+        val fullscreen = LiveTvReducer.reduce(backToChannels, LiveTvAction.Back)
+
+        assertEquals(LiveTvMode.EPG_VISIBLE, guide.mode)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, backToChannels.mode)
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, fullscreen.mode)
+    }
+
+    @Test fun backClosesContextMenuToExactOpeningLayer() {
         val menu = LiveTvUiState(
-            mode = LiveTvMode.CHANNEL_CONTEXT_MENU,
-            openedFromMode = LiveTvMode.TV_GUIDE,
+            mode = LiveTvMode.CONTEXT_MENU_VISIBLE,
+            openedFromMode = LiveTvMode.EPG_VISIBLE,
             channelIds = channels,
         )
 
         val guide = LiveTvReducer.reduce(menu, LiveTvAction.Back)
-        val channelsLayer = LiveTvReducer.reduce(guide, LiveTvAction.Back)
-        val fullscreen = LiveTvReducer.reduce(channelsLayer, LiveTvAction.Back)
-        val controls = LiveTvReducer.reduce(fullscreen, LiveTvAction.Ok)
-        val fullscreenAgain = LiveTvReducer.reduce(controls, LiveTvAction.Back)
 
-        assertEquals(LiveTvMode.TV_GUIDE, guide.mode)
-        assertEquals(LiveTvMode.CHANNEL_LIST_PREVIEW, channelsLayer.mode)
-        assertEquals(LiveTvMode.PLAYER_FULLSCREEN, fullscreen.mode)
-        assertEquals(LiveTvMode.PLAYER_CONTROLS_VISIBLE, controls.mode)
-        assertEquals(LiveTvMode.PLAYER_FULLSCREEN, fullscreenAgain.mode)
+        assertEquals(LiveTvMode.EPG_VISIBLE, guide.mode)
     }
 
-    @Test fun longBackAlwaysReturnsToFullscreen() {
-        val state = LiveTvUiState(mode = LiveTvMode.PROGRAM_CONTEXT_MENU, openedFromMode = LiveTvMode.TV_GUIDE, channelIds = channels)
+    @Test fun okFromFullscreenShowsProgramInfoAndBackRestoresCleanPlayback() {
+        val fullscreen = LiveTvUiState(mode = LiveTvMode.FULLSCREEN_PLAYBACK, channelIds = channels)
 
-        val reduced = LiveTvReducer.reduce(state, LiveTvAction.LongBack)
+        val info = LiveTvReducer.reduce(fullscreen, LiveTvAction.Ok)
+        val clean = LiveTvReducer.reduce(info, LiveTvAction.Back)
 
-        assertEquals(LiveTvMode.PLAYER_FULLSCREEN, reduced.mode)
-        assertEquals(LiveTvVideoSurfaceMode.FULLSCREEN, reduced.videoSurfaceMode)
+        assertEquals(LiveTvMode.PROGRAM_INFO_VISIBLE, info.mode)
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, clean.mode)
     }
 
-    @Test fun longOkOpensProgramContextMenuFromGuideProgramFocus() {
-        val state = LiveTvUiState(mode = LiveTvMode.TV_GUIDE, channelIds = channels, focusedProgramId = 99L)
+    @Test fun okFromListStartsBufferingButDoesNotMarkPlayingUntilPlaybackReady() {
+        val state = LiveTvUiState(
+            mode = LiveTvMode.CHANNEL_LIST_VISIBLE,
+            channelIds = channels,
+            focusedChannelId = 20L,
+            selectedChannelId = 10L,
+            playingChannelId = 10L,
+        )
 
-        val reduced = LiveTvReducer.reduce(state, LiveTvAction.LongOk)
+        val buffering = LiveTvReducer.reduce(state, LiveTvAction.Ok)
+        val ready = LiveTvReducer.reduce(buffering, LiveTvAction.PlaybackReady)
 
-        assertEquals(LiveTvMode.PROGRAM_CONTEXT_MENU, reduced.mode)
-        assertEquals(LiveTvMode.TV_GUIDE, reduced.openedFromMode)
+        assertEquals(LiveTvMode.BUFFERING, buffering.mode)
+        assertEquals(20L, buffering.selectedChannelId)
+        assertEquals(10L, buffering.playingChannelId)
+        assertEquals(LiveTvMode.FULLSCREEN_PLAYBACK, ready.mode)
+        assertEquals(20L, ready.playingChannelId)
     }
 
-    @Test fun longOkOpensChannelContextMenuWithoutFocusedProgram() {
-        val state = LiveTvUiState(mode = LiveTvMode.CHANNEL_LIST_OVERLAY, channelIds = channels, focusedProgramId = null)
+    @Test fun longOkAlwaysOpensContextMenuAndBackRestoresFocusLayer() {
+        val state = LiveTvUiState(mode = LiveTvMode.CHANNEL_LIST_VISIBLE, channelIds = channels, focusedProgramId = null)
 
-        val reduced = LiveTvReducer.reduce(state, LiveTvAction.LongOk)
+        val menu = LiveTvReducer.reduce(state, LiveTvAction.LongOk)
+        val restored = LiveTvReducer.reduce(menu, LiveTvAction.Back)
 
-        assertEquals(LiveTvMode.CHANNEL_CONTEXT_MENU, reduced.mode)
-        assertEquals(LiveTvMode.CHANNEL_LIST_OVERLAY, reduced.openedFromMode)
+        assertEquals(LiveTvMode.CONTEXT_MENU_VISIBLE, menu.mode)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, menu.openedFromMode)
+        assertEquals(LiveTvMode.CHANNEL_LIST_VISIBLE, restored.mode)
     }
 }

@@ -12,9 +12,9 @@ class RemoteActionMapperTest {
     fun `player fullscreen defaults map principal playback commands`() {
         assertEquals(LiveTvAction.Ok, RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.OK), RemoteSurface.PLAYER))
         assertEquals(LiveTvAction.LongOk, RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.LONG_OK), RemoteSurface.PLAYER))
-        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.CHANNEL_LIST_OVERLAY), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.LEFT), RemoteSurface.PLAYER))
-        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.TV_GUIDE), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.LONG_LEFT), RemoteSurface.PLAYER))
-        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.TV_GUIDE), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.RIGHT), RemoteSurface.PLAYER))
+        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.CHANNEL_LIST_VISIBLE), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.LEFT), RemoteSurface.PLAYER))
+        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.EPG_VISIBLE), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.LONG_LEFT), RemoteSurface.PLAYER))
+        assertEquals(LiveTvAction.OpenPanel(LiveTvMode.EPG_VISIBLE), RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.RIGHT), RemoteSurface.PLAYER))
         assertEquals(LiveTvAction.ZapUp, RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.UP), RemoteSurface.PLAYER))
         assertEquals(LiveTvAction.ZapDown, RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.DOWN), RemoteSurface.PLAYER))
         assertEquals(LiveTvAction.Back, RemoteActionMapper.map(RemoteCommandEvent(RemoteCommand.BACK), RemoteSurface.PLAYER))
@@ -53,9 +53,9 @@ class RemoteActionMapperTest {
 
     @Test
     fun `surface is inferred from live tv mode`() {
-        assertEquals(RemoteSurface.PLAYER, RemoteActionMapper.surfaceFor(LiveTvMode.PLAYER_FULLSCREEN))
-        assertEquals(RemoteSurface.TV_GUIDE, RemoteActionMapper.surfaceFor(LiveTvMode.TV_GUIDE))
-        assertEquals(RemoteSurface.CHANNEL_LIST, RemoteActionMapper.surfaceFor(LiveTvMode.CHANNEL_LIST_OVERLAY))
+        assertEquals(RemoteSurface.PLAYER, RemoteActionMapper.surfaceFor(LiveTvMode.FULLSCREEN_PLAYBACK))
+        assertEquals(RemoteSurface.TV_GUIDE, RemoteActionMapper.surfaceFor(LiveTvMode.EPG_VISIBLE))
+        assertEquals(RemoteSurface.CHANNEL_LIST, RemoteActionMapper.surfaceFor(LiveTvMode.CHANNEL_LIST_VISIBLE))
     }
 
     @Test

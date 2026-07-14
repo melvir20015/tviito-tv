@@ -43,9 +43,9 @@ object RemoteActionMapper {
     private val playerDefaults: Map<RemoteCommand, LiveTvAction> = mapOf(
         RemoteCommand.OK to LiveTvAction.Ok,
         RemoteCommand.LONG_OK to LiveTvAction.LongOk,
-        RemoteCommand.LEFT to LiveTvAction.OpenPanel(LiveTvMode.CHANNEL_LIST_OVERLAY),
-        RemoteCommand.LONG_LEFT to LiveTvAction.OpenPanel(LiveTvMode.TV_GUIDE),
-        RemoteCommand.RIGHT to LiveTvAction.OpenPanel(LiveTvMode.TV_GUIDE),
+        RemoteCommand.LEFT to LiveTvAction.OpenPanel(LiveTvMode.CHANNEL_LIST_VISIBLE),
+        RemoteCommand.LONG_LEFT to LiveTvAction.OpenPanel(LiveTvMode.EPG_VISIBLE),
+        RemoteCommand.RIGHT to LiveTvAction.OpenPanel(LiveTvMode.EPG_VISIBLE),
         RemoteCommand.UP to LiveTvAction.ZapUp,
         RemoteCommand.DOWN to LiveTvAction.ZapDown,
         RemoteCommand.BACK to LiveTvAction.Back,
@@ -71,8 +71,12 @@ object RemoteActionMapper {
     )
 
     fun surfaceFor(mode: LiveTvMode): RemoteSurface = when (mode) {
-        LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE, LiveTvMode.LOADING_CHANNEL, LiveTvMode.PLAYBACK_ERROR -> RemoteSurface.PLAYER
-        LiveTvMode.TV_GUIDE, LiveTvMode.PROGRAM_CONTEXT_MENU -> RemoteSurface.TV_GUIDE
+        LiveTvMode.FULLSCREEN_PLAYBACK, LiveTvMode.PROGRAM_INFO_VISIBLE, LiveTvMode.PLAYER_FULLSCREEN, LiveTvMode.PLAYER_CONTROLS_VISIBLE, LiveTvMode.BUFFERING, LiveTvMode.LOADING_CHANNEL, LiveTvMode.PLAYBACK_ERROR -> RemoteSurface.PLAYER
+        LiveTvMode.EPG_VISIBLE, LiveTvMode.TV_GUIDE, LiveTvMode.PROGRAM_DETAILS_VISIBLE, LiveTvMode.PROGRAM_CONTEXT_MENU -> RemoteSurface.TV_GUIDE
+        LiveTvMode.CHANNEL_LIST_VISIBLE,
+        LiveTvMode.CATEGORY_PANEL_VISIBLE,
+        LiveTvMode.RECENT_CHANNELS_VISIBLE,
+        LiveTvMode.CONTEXT_MENU_VISIBLE,
         LiveTvMode.CHANNEL_LIST_OVERLAY,
         LiveTvMode.CHANNEL_LIST_PREVIEW,
         LiveTvMode.GROUP_LIST,
