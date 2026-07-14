@@ -149,6 +149,17 @@ android {
     lint {
         abortOnError = false
         checkReleaseBuilds = false
+        // Workaround mínimo para el crash de lint/Compose con Kotlin 2.0.21:
+        // algunos detectores basados en UAST fallan con Kotlin 2.0.21 y AGP 8.7.3 con
+        // "KaSimpleVariableAccessCall, but interface was expected" antes de
+        // emitir hallazgos. Deshabilitamos solo esos detectores para conservar el
+        // resto de verificaciones de lint activo.
+        disable += setOf(
+            "FrequentlyChangingValue",
+            "RememberInComposition",
+            "AutoboxingStateCreation",
+            "NullSafeMutableLiveData",
+        )
     }
 
     packaging {
@@ -219,9 +230,33 @@ dependencies {
     // can't easily strip out (android.util.Base64).
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.robolectric:robolectric:4.13")
+    // Robolectric intenta descargar este artefacto en tiempo de ejecución; lo
+    // declaramos como dependencia de test para que Gradle lo resuelva antes y
+    // los tests puedan ejecutarse aun cuando el sandbox de test no tenga red.
+    testImplementation("org.robolectric:android-all-instrumented:14-robolectric-10818077-i6")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
     testImplementation("org.json:json:20240303")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+}
+
+val prepareRobolectricOfflineDeps by tasks.registering(Copy::class) {
+    val debugUnitTestRuntime = configurations.named("debugUnitTestRuntimeClasspath")
+    from(debugUnitTestRuntime) {
+        include("android-all-instrumented-*.jar")
+    }
+    into(layout.buildDirectory.dir("robolectric-offline-deps"))
+}
+
+tasks.withType<Test>().configureEach {
+    dependsOn(prepareRobolectricOfflineDeps)
+    // Evita que Robolectric intente descargar android-all dentro del proceso
+    // de test, donde algunos entornos bloquean red aunque Gradle ya resolvió
+    // dependencias. La carpeta se rellena desde testRuntimeClasspath arriba.
+    systemProperty("robolectric.offline", "true")
+    systemProperty(
+        "robolectric.dependency.dir",
+        layout.buildDirectory.dir("robolectric-offline-deps").get().asFile.absolutePath,
+    )
 }
 
 /**

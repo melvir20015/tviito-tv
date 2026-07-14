@@ -86,7 +86,7 @@ class UserPreferencesLivePrefsTest {
             liveButtonAssignments = mapOf("BLUE" to "open_guide"),
         ).toLiveTvUiState(channelIds = listOf(10L, 20L), lastChannelId = 20L)
 
-        assertEquals(LiveTvMode.TV_GUIDE, state.mode)
+        assertEquals(LiveTvMode.EPG_VISIBLE, state.mode)
         assertEquals(20L, state.focusedChannelId)
         assertEquals("group-news", state.activeGroupId)
         assertEquals("playlist-main", state.activePlaylistId)

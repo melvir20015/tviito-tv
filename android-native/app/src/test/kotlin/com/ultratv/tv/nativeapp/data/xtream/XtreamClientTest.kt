@@ -7,7 +7,6 @@ import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFailsWith
 import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
@@ -92,6 +91,7 @@ class XtreamClientTest {
         assertFailsWith<XtreamClient.XtreamException.InvalidJson> {
             client.fetchLiveStreams(provider)
         }
+        Unit
     }
 
     @Test
@@ -103,6 +103,7 @@ class XtreamClientTest {
         assertFailsWith<XtreamClient.XtreamException.InvalidCredentials> {
             client.fetchLiveStreams(provider)
         }
+        Unit
     }
 
     @Test
@@ -187,4 +188,12 @@ class XtreamClientTest {
         assertEquals("application/json, text/plain, */*", request.getHeader("Accept"))
     }
 
+}
+
+private suspend inline fun <reified T : Throwable> assertFailsWith(
+    noinline block: suspend () -> Unit,
+): T = org.junit.Assert.assertThrows(T::class.java) {
+    runBlocking {
+        block()
+    }
 }
